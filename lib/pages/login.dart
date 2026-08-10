@@ -16,7 +16,11 @@ import 'package:webview_flutter/webview_flutter.dart';
 TextSpan _clickableLink({required String text, required String url}) {
   return TextSpan(
     text: text,
-    style: textStylePink,
+    style: EdithTextStyles.body.copyWith(
+      color: EdithColors.primaryAccent,
+      decoration: TextDecoration.underline,
+      decorationColor: EdithColors.primaryAccent,
+    ),
     recognizer: TapGestureRecognizer()
       ..onTap = () async {
         try {
@@ -42,7 +46,7 @@ Widget _loginButton(
           alertDialog(
             context,
             "Couldn't Sign In",
-            "Noa requires an internet connection",
+            "EDITH requires an internet connection",
           );
         }
       } on NoaApiServerException catch (error) {
@@ -55,11 +59,55 @@ Widget _loginButton(
         }
       } catch (_) {}
     },
-    child: Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Image.asset(image),
+    child: Container(
+      width: 320,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: EdithColors.surface,
+        border: Border.all(color: EdithColors.elevatedSurface),
+        borderRadius: const BorderRadius.all(Radius.circular(12)),
+      ),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.all(Radius.circular(10)),
+        child: Image.asset(image, fit: BoxFit.contain),
+      ),
     ),
   );
+}
+
+class _EdithLoginBrand extends StatelessWidget {
+  const _EdithLoginBrand();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 52,
+          height: 2,
+          color: EdithColors.primaryAccent,
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'EDITH',
+          style: TextStyle(
+            fontFamily: EdithTextStyles.fontFamily,
+            color: EdithColors.primaryText,
+            fontSize: 36,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 8,
+          ),
+        ),
+        const SizedBox(height: 10),
+        const Text(
+          'PERSONAL AR ASSISTANT',
+          style: EdithTextStyles.navigationLabel,
+        ),
+      ],
+    );
+  }
 }
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -83,72 +131,103 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Location.requestPermission(context);
       if (ref.watch(app.model).state.current != app.State.waitForLogin) {
-      // ref.read(app.model).triggerEvent(app.Event.loggedIn);
+        // ref.read(app.model).triggerEvent(app.Event.loggedIn);
         switchPage(context, const PairingPage());
       }
     });
 
     return Scaffold(
-      backgroundColor: colorDark,
+      backgroundColor: EdithColors.background,
       appBar: AppBar(
-        backgroundColor: colorDark,
-        title: Image.asset('assets/images/brilliant_logo.png'),
+        backgroundColor: EdithColors.background,
+        foregroundColor: EdithColors.primaryText,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('EDITH', style: EdithTextStyles.title),
         centerTitle: true,
       ),
       body: Stack(
         children: [
           Column(
             children: [
-              Expanded(child: Image.asset('assets/images/noa_logo.png')),
-              Column(
-                children: [
-                  if (Platform.isIOS)
-                    _loginButton(
-                      context,
-                      ref,
-                      'assets/images/sign_in_with_apple_button.png',
-                      SignIn().withApple,
-                    ),
-                  if (Platform.isIOS)
-                    _loginButton(
-                      context,
-                      ref,
-                      'assets/images/sign_in_with_google_button.png',
-                      SignIn().withGoogle,
-                    ),
-                  GestureDetector(
-                    onTap: () async {
-                      try {
-                        await InternetAddress.lookup('www.google.com');
-                        setState(() => showWebview = true);
-                      } on SocketException catch (_) {
-                        if (context.mounted) {
-                          alertDialog(
-                            context,
-                            "Couldn't Sign In",
-                            "Noa requires an internet connection",
-                          );
+              const Expanded(child: Center(child: _EdithLoginBrand())),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 42),
+                child: Column(
+                  children: [
+                    if (Platform.isIOS)
+                      _loginButton(
+                        context,
+                        ref,
+                        'assets/images/sign_in_with_apple_button.png',
+                        SignIn().withApple,
+                      ),
+                    if (Platform.isIOS)
+                      _loginButton(
+                        context,
+                        ref,
+                        'assets/images/sign_in_with_google_button.png',
+                        SignIn().withGoogle,
+                      ),
+                    GestureDetector(
+                      onTap: () async {
+                        try {
+                          await InternetAddress.lookup('www.google.com');
+                          setState(() => showWebview = true);
+                        } on SocketException catch (_) {
+                          if (context.mounted) {
+                            alertDialog(
+                              context,
+                              "Couldn't Sign In",
+                              "EDITH requires an internet connection",
+                            );
+                          }
                         }
-                      }
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 20),
-                      child: Image.asset(
-                          'assets/images/sign_in_with_email_button.png'),
-                    ),
-                  )
-                ],
+                      },
+                      child: Container(
+                        width: 320,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: EdithColors.surface,
+                          border: Border.all(
+                            color: EdithColors.elevatedSurface,
+                          ),
+                          borderRadius: const BorderRadius.all(
+                            Radius.circular(12),
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.all(
+                            Radius.circular(10),
+                          ),
+                          child: Image.asset(
+                            'assets/images/sign_in_with_email_button.png',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                    )
+                  ],
+                ),
               )
             ],
           ),
           if (showWebview)
             Container(
-              padding: const EdgeInsets.all(50),
-              color: const Color(0xA0292929),
+              padding: const EdgeInsets.all(32),
+              color: EdithColors.background.withValues(alpha: 0.92),
               child: Container(
                 decoration: BoxDecoration(
-                  border: Border.all(color: colorWhite, width: 2),
+                  color: EdithColors.surface,
+                  border: Border.all(
+                    color: EdithColors.primaryAccent,
+                    width: 1,
+                  ),
+                  borderRadius: const BorderRadius.all(Radius.circular(12)),
                 ),
+                clipBehavior: Clip.antiAlias,
                 child: WebViewWidget(
                   controller: WebViewController()
                     ..loadRequest(
@@ -170,22 +249,31 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         ],
       ),
       bottomNavigationBar: Padding(
-        padding: const EdgeInsets.only(bottom: 48, top: 48),
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
         child: RichText(
           textAlign: TextAlign.center,
           text: TextSpan(
             children: <TextSpan>[
-              const TextSpan(text: ''),
+              const TextSpan(
+                text: 'By continuing, you agree to the ',
+                style: EdithTextStyles.secondaryBody,
+              ),
               _clickableLink(
                 text: 'Privacy Policy',
                 url: 'https://brilliant.xyz/pages/privacy-policy',
               ),
-              const TextSpan(text: ' and ', style: textStyleWhite),
+              const TextSpan(
+                text: ' and ',
+                style: EdithTextStyles.secondaryBody,
+              ),
               _clickableLink(
                 text: 'Terms and Conditions',
                 url: 'https://brilliant.xyz/pages/terms-conditions',
               ),
-              const TextSpan(text: ' of Noa.', style: textStyleWhite),
+              const TextSpan(
+                text: ' for EDITH.',
+                style: EdithTextStyles.secondaryBody,
+              ),
             ],
           ),
         ),

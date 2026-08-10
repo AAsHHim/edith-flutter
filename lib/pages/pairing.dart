@@ -54,19 +54,19 @@ class PairingPage extends ConsumerWidget {
         pairingBoxButtonEnabled = false;
         break;
       case app.State.uploadMainLua:
-        pairingBoxText = "Setting up Noa $scriptProgress%";
+        pairingBoxText = "Setting up EDITH $scriptProgress%";
         pairingBoxButtonText = "Keep your device close";
         pairingBoxImage = Image.asset('assets/images/charge.gif');
         pairingBoxButtonEnabled = false;
         break;
       case app.State.uploadGraphicsLua:
-        pairingBoxText = "Setting up Noa 68%";
+        pairingBoxText = "Setting up EDITH 68%";
         pairingBoxButtonText = "Keep your device close";
         pairingBoxImage = Image.asset('assets/images/charge.gif');
         pairingBoxButtonEnabled = false;
         break;
       case app.State.uploadStateLua:
-        pairingBoxText = "Setting up Noa 83%";
+        pairingBoxText = "Setting up EDITH 83%";
         pairingBoxButtonText = "Keep your device close";
         pairingBoxImage = Image.asset('assets/images/charge.gif');
         pairingBoxButtonEnabled = false;
@@ -80,25 +80,36 @@ class PairingPage extends ConsumerWidget {
     }
 
     return Scaffold(
-      backgroundColor: colorDark,
+      backgroundColor: EdithColors.background,
       appBar: AppBar(
-        backgroundColor: colorDark,
-        title: Image.asset('assets/images/brilliant_logo.png'),
+        backgroundColor: EdithColors.background,
+        foregroundColor: EdithColors.primaryText,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: const Text('EDITH', style: EdithTextStyles.title),
+        centerTitle: true,
       ),
       body: Column(
         children: [
           const Expanded(
             child: Center(
-              child: Text("Setup your device", style: textStyleLightHeading),
+              child: Text(
+                "SET UP YOUR DEVICE",
+                style: EdithTextStyles.heading,
+              ),
             ),
           ),
           AspectRatio(
             aspectRatio: 1,
             child: Container(
-              margin: const EdgeInsets.only(bottom: 22, left: 11, right: 11),
+              margin: const EdgeInsets.only(bottom: 22, left: 20, right: 20),
               decoration: const BoxDecoration(
-                color: colorWhite,
-                borderRadius: BorderRadius.all(Radius.circular(42)),
+                color: EdithColors.surface,
+                border: Border.fromBorderSide(
+                  BorderSide(color: EdithColors.elevatedSurface),
+                ),
+                borderRadius: BorderRadius.all(Radius.circular(24)),
               ),
               child: Column(
                 children: [
@@ -114,7 +125,7 @@ class PairingPage extends ConsumerWidget {
                         },
                         child: const Icon(
                           Icons.cancel,
-                          color: colorDark,
+                          color: EdithColors.primaryAccent,
                         ),
                       ),
                     ),
@@ -122,14 +133,30 @@ class PairingPage extends ConsumerWidget {
                   Text(
                     pairingBoxText,
                     style: const TextStyle(
-                      fontFamily: 'SF Pro Display',
-                      color: colorDark,
-                      fontSize: 24,
+                      fontFamily: EdithTextStyles.fontFamily,
+                      color: EdithColors.primaryText,
+                      fontSize: 22,
                       fontWeight: FontWeight.w600,
+                      letterSpacing: 0.4,
                     ),
-                  ), //
+                    textAlign: TextAlign.center,
+                  ),
                   Expanded(
-                    child: pairingBoxImage,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(12),
+                        ),
+                        child: ColoredBox(
+                          color: EdithColors.primaryText,
+                          child: pairingBoxImage,
+                        ),
+                      ),
+                    ),
                   ),
                   GestureDetector(
                     onTap: () {
@@ -137,7 +164,14 @@ class PairingPage extends ConsumerWidget {
                     },
                     child: Container(
                       decoration: BoxDecoration(
-                        color: pairingBoxButtonEnabled ? colorDark : colorLight,
+                        color: pairingBoxButtonEnabled
+                            ? EdithColors.primaryAccent
+                            : EdithColors.elevatedSurface,
+                        border: Border.all(
+                          color: pairingBoxButtonEnabled
+                              ? EdithColors.primaryAccent
+                              : EdithColors.disabled,
+                        ),
                         borderRadius:
                             const BorderRadius.all(Radius.circular(20)),
                       ),
@@ -147,7 +181,9 @@ class PairingPage extends ConsumerWidget {
                       child: Center(
                         child: Text(
                           pairingBoxButtonText,
-                          style: textStyleWhiteWidget,
+                          style: pairingBoxButtonEnabled
+                              ? EdithTextStyles.selectedNavigationLabel
+                              : EdithTextStyles.navigationLabel,
                         ),
                       ),
                     ),
