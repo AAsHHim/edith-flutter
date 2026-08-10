@@ -26,10 +26,83 @@ class SplashPage extends ConsumerWidget {
       });
     });
 
-    return Scaffold(
-      backgroundColor: colorWhite,
-      body: Center(
-        child: Image.asset('assets/images/brilliant_logo_black.png'),
+    return const Scaffold(
+      backgroundColor: EdithColors.background,
+      body: SafeArea(
+        child: Center(
+          child: _EdithSplashBrand(),
+        ),
+      ),
+    );
+  }
+}
+
+class _EdithSplashBrand extends StatelessWidget {
+  const _EdithSplashBrand();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'EDITH',
+      excludeSemantics: true,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ExcludeSemantics(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: const BoxDecoration(
+                    color: EdithColors.secondaryAccent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                Container(
+                  width: 42,
+                  height: 1,
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  color: EdithColors.primaryAccent,
+                ),
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: const BoxDecoration(
+                    color: EdithColors.secondaryAccent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'EDITH',
+            style: TextStyle(
+              fontFamily: EdithTextStyles.fontFamily,
+              color: EdithColors.primaryText,
+              fontSize: 38,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 8,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: 156,
+            height: 2,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.transparent,
+                  EdithColors.primaryAccent,
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
