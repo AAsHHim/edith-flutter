@@ -8,13 +8,14 @@ import 'package:noa/widgets/top_title_bar.dart';
 Widget _textBox(WidgetRef ref, int index) {
   late String title;
   late String value;
-  late bool isCustomServerEnabled = ref.watch(app.model.select((v) => v.customServer));
+  late bool isCustomServerEnabled =
+      ref.watch(app.model.select((v) => v.customServer));
   late bool willShow = true;
   switch (index) {
     case 0:
       willShow = !isCustomServerEnabled;
       title = "System prompt";
-      value = ref.watch(app.model.select((v) => v.tunePrompt)); 
+      value = ref.watch(app.model.select((v) => v.tunePrompt));
       break;
   }
   if (!willShow) {
@@ -27,12 +28,15 @@ Widget _textBox(WidgetRef ref, int index) {
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 10),
-          child: Text(title, style: textStyleLightSubHeading),
+          child: Text(title, style: EdithTextStyles.subheading),
         ),
         Container(
           decoration: const BoxDecoration(
-            color: colorLight,
+            color: EdithColors.surface,
             borderRadius: BorderRadius.all(Radius.circular(10)),
+            border: Border.fromBorderSide(
+              BorderSide(color: EdithColors.elevatedSurface),
+            ),
           ),
           padding: const EdgeInsets.only(
             top: 5,
@@ -52,9 +56,9 @@ Widget _textBox(WidgetRef ref, int index) {
                   break;
               }
             },
-            style: textStyleDark,
+            style: EdithTextStyles.body,
             decoration: const InputDecoration.collapsed(
-              fillColor: colorLight,
+              fillColor: EdithColors.surface,
               filled: true,
               hintText: "",
             ),
@@ -68,7 +72,8 @@ Widget _textBox(WidgetRef ref, int index) {
 Widget _inputBox(WidgetRef ref, int index) {
   late String title;
   late String value;
-  late bool isCustomServerEnabled = ref.watch(app.model.select((v) => v.customServer));
+  late bool isCustomServerEnabled =
+      ref.watch(app.model.select((v) => v.customServer));
   late bool willShow = true;
 
   switch (index) {
@@ -98,12 +103,15 @@ Widget _inputBox(WidgetRef ref, int index) {
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 10),
-          child: Text(title, style: textStyleLightSubHeading),
+          child: Text(title, style: EdithTextStyles.subheading),
         ),
         Container(
           decoration: const BoxDecoration(
-            color: colorLight,
+            color: EdithColors.surface,
             borderRadius: BorderRadius.all(Radius.circular(10)),
+            border: Border.fromBorderSide(
+              BorderSide(color: EdithColors.elevatedSurface),
+            ),
           ),
           padding: const EdgeInsets.only(
             top: 5,
@@ -129,9 +137,9 @@ Widget _inputBox(WidgetRef ref, int index) {
                   break;
               }
             },
-            style: textStyleDark,
+            style: EdithTextStyles.body,
             decoration: const InputDecoration.collapsed(
-              fillColor: colorLight,
+              fillColor: EdithColors.surface,
               filled: true,
               hintText: "",
             ),
@@ -147,7 +155,8 @@ Widget _slider(WidgetRef ref, int index) {
   late int divisions;
   late int value;
   late String label;
-  late bool isCustomServerEnabled = ref.watch(app.model.select((v) => v.customServer));
+  late bool isCustomServerEnabled =
+      ref.watch(app.model.select((v) => v.customServer));
   late bool willShow = true;
   switch (index) {
     case 0:
@@ -175,17 +184,18 @@ Widget _slider(WidgetRef ref, int index) {
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 0),
-          child: Text(title, style: textStyleLightSubHeading),
+          child: Text(title, style: EdithTextStyles.subheading),
         ),
         SliderTheme(
           data: const SliderThemeData(
-            trackHeight: 5,
-            activeTrackColor: colorLight,
-            activeTickMarkColor: colorLight,
-            inactiveTrackColor: colorLight,
-            inactiveTickMarkColor: colorLight,
-            thumbColor: colorLight,
-            valueIndicatorColor: colorDark,
+            trackHeight: 3,
+            activeTrackColor: EdithColors.primaryAccent,
+            activeTickMarkColor: EdithColors.primaryAccent,
+            inactiveTrackColor: EdithColors.elevatedSurface,
+            inactiveTickMarkColor: EdithColors.disabled,
+            thumbColor: EdithColors.primaryAccent,
+            valueIndicatorColor: EdithColors.elevatedSurface,
+            valueIndicatorTextStyle: EdithTextStyles.body,
             trackShape: RectangularSliderTrackShape(),
           ),
           child: Slider(
@@ -235,7 +245,8 @@ Widget _checkBox(WidgetRef ref, int index) {
   late bool value;
   late String disableOption = "Disabled";
   late String enableOption = "Enabled";
-  late bool isCustomServerEnabled = ref.watch(app.model.select((v) => v.customServer));
+  late bool isCustomServerEnabled =
+      ref.watch(app.model.select((v) => v.customServer));
   late bool willShow = true;
 
   switch (index) {
@@ -252,7 +263,7 @@ Widget _checkBox(WidgetRef ref, int index) {
     case 2:
       title = "Server";
       value = ref.watch(app.model.select((v) => v.customServer));
-      disableOption = "Noa Server";
+      disableOption = "EDITH Service";
       enableOption = "Custom Server";
   }
   if (!willShow) {
@@ -266,20 +277,24 @@ Widget _checkBox(WidgetRef ref, int index) {
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 8.0),
-          child: Text(title, style: textStyleLightSubHeading),
+          child: Text(title, style: EdithTextStyles.subheading),
         ),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-             Padding(
+            Padding(
               padding: const EdgeInsets.only(right: 8),
-              child: Text(disableOption, style: textStyleDark),
+              child: Text(
+                disableOption,
+                style: EdithTextStyles.secondaryBody,
+              ),
             ),
             Switch(
               value: value,
-              activeColor: colorDark,
-              inactiveTrackColor: colorWhite,
-              inactiveThumbColor: colorLight,
+              activeThumbColor: EdithColors.primaryAccent,
+              activeTrackColor: EdithColors.secondaryAccent,
+              inactiveTrackColor: EdithColors.elevatedSurface,
+              inactiveThumbColor: EdithColors.disabled,
               onChanged: (value) {
                 switch (index) {
                   case 0:
@@ -296,7 +311,10 @@ Widget _checkBox(WidgetRef ref, int index) {
             ),
             Padding(
               padding: const EdgeInsets.only(right: 8, left: 8),
-              child: Text(enableOption, style: textStyleDark),
+              child: Text(
+                enableOption,
+                style: EdithTextStyles.secondaryBody,
+              ),
             ),
           ],
         ),
@@ -311,10 +329,10 @@ class TunePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      backgroundColor: colorWhite,
-      appBar: topTitleBar(context, 'HACK', false, false),
+      backgroundColor: EdithColors.background,
+      appBar: topTitleBar(context, 'TUNE', true, false),
       body: Padding(
-        padding: const EdgeInsets.only(left: 42, right: 42),
+        padding: const EdgeInsets.only(left: 42, top: 8, right: 42),
         child: SingleChildScrollView(
           child: Column(
             children: [
@@ -331,7 +349,7 @@ class TunePage extends ConsumerWidget {
           ),
         ),
       ),
-      bottomNavigationBar: bottomNavBar(context, 1, false),
+      bottomNavigationBar: bottomNavBar(context, 1, true),
     );
   }
 }

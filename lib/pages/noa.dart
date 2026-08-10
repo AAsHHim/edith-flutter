@@ -61,8 +61,8 @@ class _NoaPageState extends ConsumerState<NoaPage> {
     });
 
     return Scaffold(
-      backgroundColor: colorWhite,
-      appBar: topTitleBar(context, 'CHAT', false, false),
+      backgroundColor: EdithColors.background,
+      appBar: topTitleBar(context, 'EDITH', true, false),
       body: PageStorage(
         bucket: globalPageStorageBucket,
         child: ListView.builder(
@@ -70,18 +70,14 @@ class _NoaPageState extends ConsumerState<NoaPage> {
           controller: _scrollController,
           itemCount: ref.watch(app.model).noaMessages.length,
           itemBuilder: (context, index) {
-            TextStyle style = textStyleLight;
-            if (ref.watch(app.model).noaMessages[index].from == NoaRole.noa) {
-              style = textStyleDark;
-            }
+            final message = ref.watch(app.model).noaMessages[index];
+            final isAssistant = message.from == NoaRole.noa;
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (index == 0 ||
-                    ref
-                            .watch(app.model)
-                            .noaMessages[index]
-                            .time
+                    message.time
                             .difference(ref
                                 .watch(app.model)
                                 .noaMessages[index - 1]
@@ -89,55 +85,87 @@ class _NoaPageState extends ConsumerState<NoaPage> {
                             .inSeconds >
                         1700)
                   Container(
-                    margin: const EdgeInsets.only(top: 40, left: 42, right: 42),
+                    margin: const EdgeInsets.only(top: 28, left: 42, right: 42),
                     child: Row(
                       children: [
                         Text(
-                          "${ref.watch(app.model).noaMessages[index].time.hour.toString().padLeft(2, '0')}:${ref.watch(app.model).noaMessages[index].time.minute.toString().padLeft(2, '0')}",
-                          style: const TextStyle(color: colorLight),
+                          "${message.time.hour.toString().padLeft(2, '0')}:${message.time.minute.toString().padLeft(2, '0')}",
+                          style: EdithTextStyles.navigationLabel,
                         ),
                         const Flexible(
                           child: Divider(
                             indent: 10,
-                            color: colorLight,
+                            color: EdithColors.elevatedSurface,
                           ),
                         ),
                       ],
                     ),
                   ),
                 Container(
-                  margin: const EdgeInsets.only(top: 10, left: 65, right: 42),
-                  child: Text(
-                    ref.watch(app.model).noaMessages[index].message,
-                    style: style,
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(top: 10, left: 42, right: 42),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: isAssistant
+                        ? EdithColors.surface
+                        : EdithColors.elevatedSurface,
+                    border: Border.all(
+                      color: isAssistant
+                          ? EdithColors.primaryAccent
+                          : EdithColors.secondaryAccent,
+                      width: 1,
+                    ),
+                    borderRadius: const BorderRadius.all(Radius.circular(10)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isAssistant ? 'EDITH' : 'YOU',
+                        style: EdithTextStyles.navigationLabel.copyWith(
+                          color: isAssistant
+                              ? EdithColors.primaryAccent
+                              : EdithColors.secondaryAccent,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        message.message,
+                        style: EdithTextStyles.body.copyWith(height: 1.4),
+                      ),
+                    ],
                   ),
                 ),
-                if (ref.watch(app.model).noaMessages[index].image != null)
+                if (message.image != null)
                   Container(
                     decoration: BoxDecoration(
                       border: Border.all(
-                        color: colorLight,
-                        width: 0.5,
+                        color: EdithColors.primaryAccent,
+                        width: 1,
                       ),
-                      borderRadius: BorderRadius.circular(10.5),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     margin: const EdgeInsets.only(
-                        top: 10, bottom: 10, left: 65, right: 65),
+                      top: 10,
+                      bottom: 10,
+                      left: 42,
+                      right: 42,
+                    ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(9),
                       child: SizedBox.fromSize(
                         child: GestureDetector(
                           onLongPress: () async {
                             await SaverGallery.saveImage(
-                                ref.watch(app.model).noaMessages[index].image!,
-                                name: const Uuid().v1(),
-                                androidExistNotSave: false);
+                              message.image!,
+                              name: const Uuid().v1(),
+                              androidExistNotSave: false,
+                            );
                             if (context.mounted) {
                               showToast("Saved to photos", context);
                             }
                           },
-                          child: Image.memory(
-                              ref.watch(app.model).noaMessages[index].image!),
+                          child: Image.memory(message.image!),
                         ),
                       ),
                     ),
@@ -148,7 +176,7 @@ class _NoaPageState extends ConsumerState<NoaPage> {
           padding: const EdgeInsets.only(bottom: 20),
         ),
       ),
-      bottomNavigationBar: bottomNavBar(context, 0, false),
+      bottomNavigationBar: bottomNavBar(context, 0, true),
     );
   }
 }

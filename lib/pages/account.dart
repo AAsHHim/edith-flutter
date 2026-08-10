@@ -10,24 +10,37 @@ import 'package:url_launcher/url_launcher.dart';
 
 Widget _accountInfoText(String title, String detail) {
   return Padding(
-    padding: const EdgeInsets.only(bottom: 42),
-    child: Column(
-      children: [
-        Text(title, style: textStyleLightSubHeading),
-        Text(detail, style: textStyleDarkTitle),
-      ],
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: EdithColors.surface,
+        border: Border.all(color: EdithColors.elevatedSurface),
+        borderRadius: const BorderRadius.all(Radius.circular(10)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: EdithTextStyles.subheading),
+          const SizedBox(height: 6),
+          Text(detail, style: EdithTextStyles.title),
+        ],
+      ),
     ),
   );
 }
 
 Widget _linkedFooterText(String text, bool redText, Function action) {
   return Padding(
-    padding: const EdgeInsets.only(top: 8),
+    padding: const EdgeInsets.only(top: 12),
     child: GestureDetector(
       onTap: () => action(),
       child: Text(
         text,
-        style: redText ? textStyleRed : textStyleDark,
+        style: redText
+            ? EdithTextStyles.body.copyWith(color: EdithColors.error)
+            : EdithTextStyles.body,
       ),
     ),
   );
@@ -39,24 +52,29 @@ class AccountPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      backgroundColor: colorWhite,
-      appBar: topTitleBar(context, 'ACCOUNT', false, true),
-      body: Column(
-        children: [
-          Center(
-            child: Column(
+      backgroundColor: EdithColors.background,
+      appBar: topTitleBar(context, 'ACCOUNT', true, true),
+      body: Padding(
+        padding: const EdgeInsets.only(left: 42, top: 8, right: 42),
+        child: Column(
+          children: [
+            Column(
               children: [
                 _accountInfoText(
-                    "Signed In As", ref.watch(app.model).noaUser.email),
-                _accountInfoText("Credits Used",
-                    "${ref.watch(app.model).noaUser.creditsUsed} / ${ref.watch(app.model).noaUser.maxCredits}"),
-                _accountInfoText("Plan", ref.watch(app.model).noaUser.plan)
+                  "Signed In As",
+                  ref.watch(app.model).noaUser.email,
+                ),
+                _accountInfoText(
+                  "Credits Used",
+                  "${ref.watch(app.model).noaUser.creditsUsed} / ${ref.watch(app.model).noaUser.maxCredits}",
+                ),
+                _accountInfoText(
+                  "Plan",
+                  ref.watch(app.model).noaUser.plan,
+                ),
               ],
             ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(left: 42, bottom: 50),
+            Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -75,7 +93,9 @@ class AccountPage extends ConsumerWidget {
                     }
                   }),
                   _linkedFooterText("Fix scripts", false, () async {
-                    ref.read(app.model).triggerEvent(app.Event.resetScriptsPressed);
+                    ref
+                        .read(app.model)
+                        .triggerEvent(app.Event.resetScriptsPressed);
                   }),
                   _linkedFooterText("Privacy Policy", false, () async {
                     try {
@@ -103,8 +123,9 @@ class AccountPage extends ConsumerWidget {
                 ],
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 50),
+          ],
+        ),
       ),
     );
   }

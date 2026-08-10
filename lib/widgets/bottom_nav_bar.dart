@@ -69,7 +69,7 @@ Widget bottomNavBar(BuildContext context, int selected, bool darkMode) {
               ),
               child: Center(
                 child: Text(
-                  "HACK",
+                  "TUNE",
                   style: getButtonTextStyle(selected == 1),
                 ),
               ),

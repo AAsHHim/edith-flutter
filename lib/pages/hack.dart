@@ -25,11 +25,12 @@ Widget _logTextBox(
       },
       child: Container(
         decoration: BoxDecoration(
-          border: Border.all(color: colorLight),
+          color: EdithColors.surface,
+          border: Border.all(color: EdithColors.elevatedSurface),
           borderRadius: const BorderRadius.all(Radius.circular(10)),
         ),
-        padding: const EdgeInsets.all(10),
-        margin: const EdgeInsets.only(bottom: 28),
+        padding: const EdgeInsets.all(14),
+        margin: const EdgeInsets.only(bottom: 24),
         width: double.infinity,
         child: SingleChildScrollView(
           controller: controller,
@@ -39,7 +40,7 @@ Widget _logTextBox(
             scrollDirection: Axis.horizontal,
             child: Text(
               data,
-              style: textStyleLight,
+              style: EdithTextStyles.secondaryBody.copyWith(height: 1.4),
             ),
           ),
         ),
@@ -65,16 +66,19 @@ class HackPage extends ConsumerWidget {
     });
 
     return Scaffold(
-      backgroundColor: colorDark,
+      backgroundColor: EdithColors.background,
       appBar: topTitleBar(context, 'LOG', true, false),
       body: Padding(
-        padding: const EdgeInsets.only(left: 42, right: 42),
+        padding: const EdgeInsets.only(left: 42, top: 8, right: 42),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Padding(
               padding: EdgeInsets.only(bottom: 10),
-              child: Text("Bluetooth log", style: textStyleLightSubHeading),
+              child: Text(
+                "Bluetooth log",
+                style: EdithTextStyles.subheading,
+              ),
             ),
             _logTextBox(
               context,
@@ -83,7 +87,7 @@ class HackPage extends ConsumerWidget {
             ),
             const Padding(
               padding: EdgeInsets.only(bottom: 10),
-              child: Text("App log", style: textStyleLightSubHeading),
+              child: Text("App log", style: EdithTextStyles.subheading),
             ),
             _logTextBox(
               context,
