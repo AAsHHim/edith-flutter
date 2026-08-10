@@ -7,11 +7,14 @@ AppBar topTitleBar(
   return AppBar(
     toolbarHeight: 84,
     automaticallyImplyLeading: false,
-    backgroundColor: darkMode ? colorDark : colorWhite,
+    backgroundColor: darkMode ? EdithColors.background : EdithColors.surface,
+    foregroundColor: EdithColors.primaryText,
+    elevation: 0,
     scrolledUnderElevation: 0,
+    surfaceTintColor: Colors.transparent,
     title: Text(
       title,
-      style: darkMode ? textStyleWhiteTitle : textStyleDarkTitle,
+      style: EdithTextStyles.title,
     ),
     centerTitle: false,
     titleSpacing: 42,
@@ -36,8 +39,10 @@ AppBar topTitleBar(
                 );
               }
             },
-            child: Icon(accountPage ? Icons.cancel : Icons.person,
-                color: darkMode ? colorWhite : colorDark),
+            child: Icon(
+              accountPage ? Icons.cancel : Icons.person,
+              color: EdithColors.primaryAccent,
+            ),
           ))
     ],
   );

@@ -7,17 +7,22 @@ import 'package:noa/util/switch_page.dart';
 
 Color getButtonColor(bool selected, bool darkMode) {
   return selected
-      ? (darkMode ? colorWhite : colorDark)
-      : (darkMode ? colorLight : colorLight);
+      ? EdithColors.primaryAccent
+      : (darkMode ? EdithColors.surface : EdithColors.elevatedSurface);
 }
+
+TextStyle getButtonTextStyle(bool selected) => selected
+    ? EdithTextStyles.selectedNavigationLabel
+    : EdithTextStyles.navigationLabel;
 
 Widget bottomNavBar(BuildContext context, int selected, bool darkMode) {
   return Container(
     height: 50,
     margin: const EdgeInsets.only(left: 42, right: 42, bottom: 50),
     decoration: BoxDecoration(
-      color: darkMode ? colorLight : colorLight,
+      color: darkMode ? EdithColors.surface : EdithColors.background,
       borderRadius: const BorderRadius.all(Radius.circular(20)),
+      border: Border.all(color: EdithColors.elevatedSurface),
     ),
     child: Row(
       children: [
@@ -39,7 +44,7 @@ Widget bottomNavBar(BuildContext context, int selected, bool darkMode) {
               child: Center(
                 child: Text(
                   "CHAT",
-                  style: darkMode ? textStyleDarkWidget : textStyleWhiteWidget,
+                  style: getButtonTextStyle(selected == 0),
                 ),
               ),
             ),
@@ -65,7 +70,7 @@ Widget bottomNavBar(BuildContext context, int selected, bool darkMode) {
               child: Center(
                 child: Text(
                   "HACK",
-                  style: darkMode ? textStyleDarkWidget : textStyleWhiteWidget,
+                  style: getButtonTextStyle(selected == 1),
                 ),
               ),
             ),
@@ -89,7 +94,7 @@ Widget bottomNavBar(BuildContext context, int selected, bool darkMode) {
               child: Center(
                 child: Text(
                   "LOG",
-                  style: darkMode ? textStyleDarkWidget : textStyleWhiteWidget,
+                  style: getButtonTextStyle(selected == 2),
                 ),
               ),
             ),
