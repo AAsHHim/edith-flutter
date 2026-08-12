@@ -301,14 +301,14 @@ class AppLogicModel extends ChangeNotifier {
 
     () async {
       noaMessages.add(NoaMessage(
-        message: "Hey I'm Noa! Let's show you around",
+        message: "Hey, I'm EDITH. Let's show you around.",
         from: NoaRole.noa,
         time: DateTime.now(),
         exclude: true,
       ));
 
       noaMessages.add(NoaMessage(
-          message: "Tap the side of your Frame to wake me up",
+          message: "Use the assistant control on your connected glasses to wake me.",
           from: NoaRole.noa,
           time: DateTime.now(),
           image: (await rootBundle.load('assets/images/tutorial/wake_up.png'))
@@ -317,7 +317,7 @@ class AppLogicModel extends ChangeNotifier {
           exclude: true));
 
       noaMessages.add(NoaMessage(
-          message: "Tap again and ask me anything",
+          message: "When EDITH starts listening, ask me anything.",
           from: NoaRole.noa,
           time: DateTime.now(),
           image: (await rootBundle.load('assets/images/tutorial/tap_start.png'))
@@ -326,7 +326,7 @@ class AppLogicModel extends ChangeNotifier {
           exclude: true));
 
       noaMessages.add(NoaMessage(
-          message: "...and then a third time to finish",
+          message: "Use the assistant control again when you're finished.",
           from: NoaRole.noa,
           time: DateTime.now(),
           image:
@@ -337,7 +337,7 @@ class AppLogicModel extends ChangeNotifier {
 
       noaMessages.add(NoaMessage(
           message:
-              "The response just takes a few seconds. Tap again to ask a follow up question",
+              "Your response will appear in a few seconds. Start another interaction to ask a follow-up question.",
           from: NoaRole.noa,
           time: DateTime.now(),
           image: (await rootBundle
@@ -347,7 +347,7 @@ class AppLogicModel extends ChangeNotifier {
           exclude: true));
 
       noaMessages.add(NoaMessage(
-          message: "The follow up just takes a few more seconds",
+          message: "Follow-up responses may take a few more seconds.",
           from: NoaRole.noa,
           time: DateTime.now(),
           image: (await rootBundle.load('assets/images/tutorial/response.png'))
@@ -368,7 +368,7 @@ class AppLogicModel extends ChangeNotifier {
               // Load the user's Tune settings or defaults if none are set
               final savedData = await SharedPreferences.getInstance();
               _tunePrompt = savedData.getString('tunePrompt') ??
-                  "You are Noa, a smart and witty personal AI assistant inside the user's AR smart glasses that answers all user queries and questions";
+                  "You are EDITH, a smart, concise, and helpful personal AI assistant inside the user's AR smart glasses. Your name is EDITH. You assist the user with questions, visual context, tasks, and information. Keep responses clear and useful for a wearable display.";
               _tuneTemperature = savedData.getInt('tuneTemperature') ?? 50;
               var len = savedData.getString('tuneLength') ?? 'standard';
               _tuneLength = TuneLength.values
