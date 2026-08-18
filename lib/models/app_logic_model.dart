@@ -7,27 +7,16 @@ import 'package:frame_ble/brilliant_bluetooth.dart';
 import 'package:frame_ble/brilliant_connection_state.dart';
 import 'package:frame_ble/brilliant_device.dart';
 import 'package:frame_ble/brilliant_scanned_device.dart';
-import 'package:frame_msg/frame_msg.dart';
 import 'package:logging/logging.dart';
 import 'package:noa/bluetooth.dart';
 import 'package:noa/device/brilliant/brilliant_wearable_session.dart';
 import 'package:noa/device/wearable_gateway.dart';
 import 'package:noa/device/wearable_models.dart';
 import 'package:noa/noa_api.dart';
-import 'package:noa/util/tx_rich_text.dart';
 import 'package:noa/util/state_machine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final _log = Logger("App logic");
-
-const messageResponseFlag = 0x20;
-const imageResponseFlag = 0x21;
-const singleDataFlag = 0x22;
-const holdResponseFlag = 0x23;
-const tapFLag = 0x10;
-const stopTapFlag = 0x13;
-const startListeningFlag = 0x11;
-const stopListeningFlag = 0x12;
 
 enum State {
   getUserSettings,
@@ -216,27 +205,14 @@ class AppLogicModel extends ChangeNotifier {
   // Private state variables
   StreamSubscription? _scanStream;
   StreamSubscription? _connectionStream;
-  StreamSubscription? _luaResponseStream;
   StreamSubscription<WearableSetupUpdate>? _setupSubscription;
   BrilliantScannedDevice? _nearbyDevice;
   BrilliantDevice? _connectedDevice;
   WearableSession? _wearableSession;
-  StreamSubscription<int>? _tapSubs;
+  StreamSubscription<WearableInputEvent>? _inputSubscription;
   bool _setupActive = false;
   bool _restartProvisioningOnSetupDone = false;
   bool _cancelled = false;
-  // List<int> _audioData = List.empty(growable: true);
-  // List<int> _imageData = List.empty(growable: true);
-// Photos: 720px VERY_HIGH quality JPEGs
-  static const resolution = 720;
-  static const qualityIndex = 4;
-  static const qualityLevel = 'HIGH';
-  final RxPhoto _rxPhoto =
-      RxPhoto(quality: qualityLevel, resolution: resolution);
-  Future<Uint8List>? _image;
-
-  final RxAudio _rxAudio = RxAudio(streaming: false);
-  Future<Uint8List>? _audio;
   String getTunePrompt() {
     String prompt = "";
     if (_tunePrompt != "") {
@@ -579,125 +555,123 @@ class AppLogicModel extends ChangeNotifier {
         case State.connected:
           state.onEntry(() async {
             _connectionStream?.cancel();
-            _connectionStream =
-                _connectedDevice!.connectionState.listen((event) {
-              _connectedDevice = event;
-              if (event.state == BrilliantConnectionState.disconnected) {
-                triggerEvent(Event.deviceDisconnected);
-              }
-            });
-            _connectionStream?.onError((_) {});
-            _luaResponseStream?.cancel();
-            _luaResponseStream =
-                _connectedDevice!.stringResponse.listen((event) async {});
+            _connectionStream = _wearableSession!.connectionStatuses.listen(
+              (status) {
+                if (status == WearableConnectionStatus.disconnected) {
+                  triggerEvent(Event.deviceDisconnected);
+                }
+              },
+              onError: (_) {},
+            );
             // wait for the device to be ready
             await Future.delayed(const Duration(milliseconds: 800));
-            _connectedDevice!
-                .sendMessage(singleDataFlag, TxCode(value: stopTapFlag).pack());
-            _tapSubs?.cancel();
-            _tapSubs = RxTap(
-                    tapFlag: tapFLag,
-                    threshold: const Duration(milliseconds: 200))
-                .attach(_connectedDevice!.dataResponse)
-                .listen((taps) async {
-              if (taps == 1) {
-                if (frameState == FrameState.tapMeIn) {
-                  // STEP 2: LISTENING
-                  frameState = FrameState.listening;
-                  _log.info("Listening");
-                  await _connectedDevice!.sendMessage(
-                      messageResponseFlag,
-                      TxRichText(text: "tap to finish", emoji: "\u{F0010}")
-                          .pack());
-                  _cancelled = false;
-                  if (_cancelled) return;
-                  _image =
-                      _rxPhoto.attach(_connectedDevice!.dataResponse).first;
-                  _audio =
-                      _rxAudio.attach(_connectedDevice!.dataResponse).first;
-                  await _connectedDevice!.sendMessage(
-                      startListeningFlag,
-                      TxCaptureSettings(
-                              resolution: resolution,
-                              qualityIndex: qualityIndex)
-                          .pack());
-                } else if (frameState == FrameState.listening && !_cancelled) {
-                  // STEP 3: ON IT
-                  frameState = FrameState.onit;
-                  _log.info("On it");
-                  _connectedDevice!.sendMessage(
-                      singleDataFlag, TxCode(value: stopListeningFlag).pack());
-                  await _connectedDevice!.sendMessage(
-                      messageResponseFlag,
-                      TxRichText(
-                              text:
-                                  "..................... ..................... .....................")
-                          .pack());
-                  if (_cancelled) return;
-                  var image = await _image;
-                  var audio = await _audio;
-                  _log.info(
-                      "Image: ${image?.length} bytes,  Audio: ${audio?.length} bytes");
+            await _inputSubscription?.cancel();
+            _inputSubscription = _wearableSession!.inputEvents.listen(
+              (input) async {
+                if (input.type == WearableInputType.primary) {
+                  if (frameState == FrameState.tapMeIn) {
+                    // STEP 2: LISTENING
+                    frameState = FrameState.listening;
+                    _log.info("Listening");
+                    await _wearableSession!.updateDisplay(
+                      const WearableDisplayState(
+                        mode: WearableDisplayMode.listening,
+                        primaryText: "tap to finish",
+                      ),
+                    );
+                    _cancelled = false;
+                    if (_cancelled) return;
+                    await _wearableSession!.startCapture();
+                  } else if (frameState == FrameState.listening &&
+                      !_cancelled) {
+                    // STEP 3: ON IT
+                    frameState = FrameState.onit;
+                    _log.info("On it");
+                    final captureFuture = _wearableSession!.stopCapture();
+                    await _wearableSession!.updateDisplay(
+                      const WearableDisplayState(
+                        mode: WearableDisplayMode.thinking,
+                        primaryText:
+                            "..................... ..................... "
+                            ".....................",
+                      ),
+                    );
+                    if (_cancelled) return;
+                    final capture = await captureFuture;
+                    final image = capture.imageBytes;
+                    final audio = capture.audioBytes;
+                    _log.info(
+                      "Image: ${image?.length} bytes,  "
+                      "Audio: ${audio?.length} bytes",
+                    );
 
-                  if (_cancelled) return;
-                  // to avoid fram being sleep while waiting for the response
-                  Future.delayed(const Duration(seconds: 5), () async {
-                    await _connectedDevice!.sendMessage(
-                        singleDataFlag, TxCode(value: holdResponseFlag).pack());
-                  });
-                  final newMessages = await NoaApi.getMessage(
-                      (await _getUserAuthToken())!,
-                      audio!,
-                      image!,
-                      getTunePrompt(),
-                      _tuneTemperature / 50,
-                      noaMessages,
-                      textToSpeech,
-                      apiEndpoint,
-                      apiHeader,
-                      apiToken,
-                      customServer,
-                      promptless);
-                  final topicChanged =
-                      newMessages.where((msg) => msg.topicChanged).isNotEmpty;
-                  if (topicChanged) {
-                    for (var msg in noaMessages) {
-                      msg.exclude = true;
+                    if (_cancelled) return;
+                    // Keep the wearable display awake while waiting.
+                    Future.delayed(const Duration(seconds: 5), () async {
+                      await _wearableSession?.holdDisplay();
+                    });
+                    final newMessages = await NoaApi.getMessage(
+                        (await _getUserAuthToken())!,
+                        audio!,
+                        image!,
+                        getTunePrompt(),
+                        _tuneTemperature / 50,
+                        noaMessages,
+                        textToSpeech,
+                        apiEndpoint,
+                        apiHeader,
+                        apiToken,
+                        customServer,
+                        promptless);
+                    final topicChanged =
+                        newMessages.where((msg) => msg.topicChanged).isNotEmpty;
+                    if (topicChanged) {
+                      for (var msg in noaMessages) {
+                        msg.exclude = true;
+                      }
                     }
-                  }
-                  if (_cancelled) return;
-                  noaMessages += newMessages;
-                  noaUser = await NoaApi.getUser((await _getUserAuthToken())!);
+                    if (_cancelled) return;
+                    noaMessages += newMessages;
+                    noaUser =
+                        await NoaApi.getUser((await _getUserAuthToken())!);
 
-                  if (_cancelled) return;
-                  triggerEvent(Event.noaResponse);
-                  image = null;
-                  _image = null;
-                  _audio = null;
+                    if (_cancelled) return;
+                    triggerEvent(Event.noaResponse);
+                  }
+                } else if (input.type == WearableInputType.cancel) {
+                  _log.info("Cancelled");
+                  await _wearableSession!.updateDisplay(
+                    const WearableDisplayState(
+                      mode: WearableDisplayMode.ready,
+                      primaryText: "tap me in",
+                    ),
+                  );
+                  _wearableSession!.cancelCapture();
+                  _cancelled = true;
+                  frameState = FrameState.tapMeIn;
                 }
-              } else if (taps == 2) {
-                _log.info("Cancelled");
-                await _connectedDevice!.sendMessage(messageResponseFlag,
-                    TxRichText(text: "tap me in", emoji: "\u{F0000}").pack());
-                _connectedDevice!.sendMessage(
-                    singleDataFlag, TxCode(value: stopListeningFlag).pack());
-                _cancelled = true;
-                frameState = FrameState.tapMeIn;
-              }
-            });
-            _connectedDevice!
-                .sendMessage(singleDataFlag, TxCode(value: tapFLag).pack());
+              },
+              onError: (_) {},
+            );
             // STEP 1: TAP ME IN
-            // if its coming from disconnected state immediately show tap me in, if its coming from print reply wait for 5 seconds
+            // If coming from a reply, wait before restoring the ready display.
             if (frameState == FrameState.printReply) {
               Future.delayed(const Duration(seconds: 10), () async {
-                await _connectedDevice!.sendMessage(messageResponseFlag,
-                    TxRichText(text: "tap me in", emoji: "\u{F0000}").pack());
+                await _wearableSession?.updateDisplay(
+                  const WearableDisplayState(
+                    mode: WearableDisplayMode.ready,
+                    primaryText: "tap me in",
+                  ),
+                );
                 frameState = FrameState.tapMeIn;
               });
             } else {
-              await _connectedDevice!.sendMessage(messageResponseFlag,
-                  TxRichText(text: "tap me in", emoji: "\u{F0000}").pack());
+              await _wearableSession!.updateDisplay(
+                const WearableDisplayState(
+                  mode: WearableDisplayMode.ready,
+                  primaryText: "tap me in",
+                ),
+              );
               frameState = FrameState.tapMeIn;
             }
           });
@@ -711,10 +685,12 @@ class AppLogicModel extends ChangeNotifier {
         case State.sendResponseToDevice:
           state.onEntry(() async {
             try {
-              await _connectedDevice!.sendMessage(
-                  messageResponseFlag,
-                  TxRichText(text: noaMessages.last.message, emoji: "\u{F0003}")
-                      .pack());
+              await _wearableSession!.updateDisplay(
+                WearableDisplayState(
+                  mode: WearableDisplayMode.reply,
+                  primaryText: noaMessages.last.message,
+                ),
+              );
               frameState = FrameState.printReply;
               await Future.delayed(const Duration(milliseconds: 800));
             } catch (_) {}
@@ -731,16 +707,14 @@ class AppLogicModel extends ChangeNotifier {
           frameState = FrameState.disconnected;
           state.onEntry(() async {
             _connectionStream?.cancel();
-            _connectionStream =
-                _connectedDevice?.connectionState.listen((event) async {
-              _connectedDevice = event;
-              if (event.state == BrilliantConnectionState.connected) {
-                _wearableSession = BrilliantWearableSession(event);
-                triggerEvent(Event.deviceConnected);
-              }
-            });
-
-            _connectionStream?.onError((_) {});
+            _connectionStream = _wearableSession?.connectionStatuses.listen(
+              (status) {
+                if (status == WearableConnectionStatus.connected) {
+                  triggerEvent(Event.deviceConnected);
+                }
+              },
+              onError: (_) {},
+            );
 
             try {
               _connectedDevice ??= await BrilliantBluetooth.reconnect(
@@ -781,7 +755,7 @@ class AppLogicModel extends ChangeNotifier {
           state.onEntry(() async {
             try {
               await SharedPreferences.getInstance().then((sp) => sp.clear());
-              await _connectedDevice?.disconnect();
+              await _wearableSession?.disconnect();
               await NoaApi.signOut((await _getUserAuthToken())!);
               noaMessages.clear();
               triggerEvent(Event.done);
@@ -796,7 +770,7 @@ class AppLogicModel extends ChangeNotifier {
         case State.deleteAccount:
           state.onEntry(() async {
             try {
-              await _connectedDevice?.disconnect();
+              await _wearableSession?.disconnect();
               await NoaApi.deleteUser((await _getUserAuthToken())!);
               await SharedPreferences.getInstance().then((sp) => sp.clear());
               noaMessages.clear();
@@ -819,9 +793,8 @@ class AppLogicModel extends ChangeNotifier {
     BrilliantBluetooth.stopScan();
     _scanStream?.cancel();
     _connectionStream?.cancel();
-    _luaResponseStream?.cancel();
     _setupSubscription?.cancel();
-    _tapSubs?.cancel();
+    _inputSubscription?.cancel();
     _wearableSession?.dispose();
 
     super.dispose();

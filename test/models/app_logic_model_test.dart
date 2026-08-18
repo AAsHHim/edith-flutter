@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:noa/device/wearable_gateway.dart';
 import 'package:noa/device/wearable_models.dart';
@@ -194,12 +196,127 @@ void main() {
     expect(model.state.current, State.disconnected);
     expect(model.frameState, FrameState.disconnected);
   });
+
+  testWidgets('primary actions move from ready to listening then thinking',
+      (tester) async {
+    final session = _FakeWearableSession([]);
+    final model = AppLogicModel(wearableSession: session);
+    model.state = StateMachine(State.connected);
+
+    model.triggerEvent(Event.init);
+    await tester.pump(const Duration(milliseconds: 800));
+
+    expect(model.frameState, FrameState.tapMeIn);
+    expect(session.displayStates.last.mode, WearableDisplayMode.ready);
+
+    session.emitInput(WearableInputType.primary, pressCount: 1);
+    await tester.pump();
+
+    expect(model.frameState, FrameState.listening);
+    expect(session.startCaptureCalls, 1);
+    expect(session.displayStates.last.mode, WearableDisplayMode.listening);
+
+    session.emitInput(WearableInputType.primary, pressCount: 1);
+    await tester.pump();
+
+    expect(model.frameState, FrameState.onit);
+    expect(session.stopCaptureCalls, 1);
+    expect(session.displayStates.last.mode, WearableDisplayMode.thinking);
+
+    model.dispose();
+  });
+
+  testWidgets('cancel restores ready and cancels capture', (tester) async {
+    final session = _FakeWearableSession([]);
+    final model = AppLogicModel(wearableSession: session);
+    model.state = StateMachine(State.connected);
+
+    model.triggerEvent(Event.init);
+    await tester.pump(const Duration(milliseconds: 800));
+    session.emitInput(WearableInputType.primary, pressCount: 1);
+    await tester.pump();
+    session.emitInput(WearableInputType.cancel, pressCount: 2);
+    await tester.pump();
+
+    expect(model.frameState, FrameState.tapMeIn);
+    expect(session.cancelCaptureCalls, 1);
+    expect(session.displayStates.last.mode, WearableDisplayMode.ready);
+
+    model.dispose();
+  });
+
+  testWidgets('session disconnect moves connected workflow to disconnected',
+      (tester) async {
+    final session = _FakeWearableSession([]);
+    final model = AppLogicModel(wearableSession: session);
+    model.state = StateMachine(State.connected);
+
+    model.triggerEvent(Event.init);
+    await tester.pump(const Duration(milliseconds: 800));
+    session.emitConnection(WearableConnectionStatus.disconnected);
+    await tester.pumpAndSettle();
+
+    expect(model.state.current, State.disconnected);
+    expect(model.frameState, FrameState.disconnected);
+
+    model.dispose();
+  });
+
+  testWidgets('assistant reply returns to ready after existing delay',
+      (tester) async {
+    final session = _FakeWearableSession([]);
+    final model = AppLogicModel(wearableSession: session);
+    await tester.pumpAndSettle();
+    model.state = StateMachine(State.sendResponseToDevice);
+
+    model.triggerEvent(Event.init);
+    await tester.pump();
+
+    expect(session.displayStates.last.mode, WearableDisplayMode.reply);
+    expect(
+        session.displayStates.last.primaryText, model.noaMessages.last.message);
+    expect(model.frameState, FrameState.printReply);
+
+    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pump(const Duration(milliseconds: 800));
+    expect(model.state.current, State.connected);
+    expect(model.frameState, FrameState.printReply);
+
+    await tester.pump(const Duration(seconds: 10));
+    expect(model.frameState, FrameState.tapMeIn);
+    expect(session.displayStates.last.mode, WearableDisplayMode.ready);
+
+    model.dispose();
+  });
 }
 
 class _FakeWearableSession implements WearableSession {
   _FakeWearableSession(this.updates);
 
   final List<WearableSetupUpdate> updates;
+  final StreamController<WearableConnectionStatus> _connectionController =
+      StreamController.broadcast();
+  final StreamController<WearableInputEvent> _inputController =
+      StreamController.broadcast();
+  final Completer<WearableCapture> _captureCompleter = Completer();
+  final List<WearableDisplayState> displayStates = [];
+  int startCaptureCalls = 0;
+  int stopCaptureCalls = 0;
+  int cancelCaptureCalls = 0;
+
+  void emitConnection(WearableConnectionStatus status) {
+    _connectionController.add(status);
+  }
+
+  void emitInput(WearableInputType type, {required int pressCount}) {
+    _inputController.add(
+      WearableInputEvent(
+        type: type,
+        occurredAt: DateTime(2026),
+        metadata: {'pressCount': pressCount},
+      ),
+    );
+  }
 
   @override
   WearableDescriptor get descriptor => WearableDescriptor(
@@ -210,10 +327,10 @@ class _FakeWearableSession implements WearableSession {
 
   @override
   Stream<WearableConnectionStatus> get connectionStatuses =>
-      const Stream.empty();
+      _connectionController.stream;
 
   @override
-  Stream<WearableInputEvent> get inputEvents => const Stream.empty();
+  Stream<WearableInputEvent> get inputEvents => _inputController.stream;
 
   @override
   Stream<WearableSetupUpdate> setup({
@@ -226,18 +343,35 @@ class _FakeWearableSession implements WearableSession {
   }
 
   @override
-  Future<void> startCapture() => throw UnimplementedError();
+  Future<void> startCapture() async {
+    startCaptureCalls++;
+  }
 
   @override
-  Future<WearableCapture> stopCapture() => throw UnimplementedError();
+  Future<WearableCapture> stopCapture() {
+    stopCaptureCalls++;
+    return _captureCompleter.future;
+  }
 
   @override
-  Future<void> updateDisplay(WearableDisplayState state) =>
-      throw UnimplementedError();
+  Future<void> cancelCapture() async {
+    cancelCaptureCalls++;
+  }
+
+  @override
+  Future<void> updateDisplay(WearableDisplayState state) async {
+    displayStates.add(state);
+  }
+
+  @override
+  Future<void> holdDisplay() async {}
 
   @override
   Future<void> disconnect() async {}
 
   @override
-  Future<void> dispose() async {}
+  Future<void> dispose() async {
+    await _connectionController.close();
+    await _inputController.close();
+  }
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:noa/device/brilliant/brilliant_wearable_session.dart';
@@ -152,19 +153,68 @@ void main() {
     expect(operations.disconnectCalls, 1);
   });
 
-  test('unmigrated capture and display operations are unsupported', () async {
-    final session = BrilliantWearableSession.withOperations(
-      _FakeBrilliantOperations(),
+  test('translates connection state and input counts semantically', () async {
+    final operations = _FakeBrilliantOperations(
+      connectionStates: const [
+        BrilliantSessionConnectionState.connected,
+        BrilliantSessionConnectionState.disconnected,
+      ],
+      inputCounts: const [1, 2, 3],
     );
+    final session = BrilliantWearableSession.withOperations(operations);
 
-    await expectLater(session.startCapture(), throwsUnsupportedError);
-    await expectLater(session.stopCapture(), throwsUnsupportedError);
-    await expectLater(
-      session.updateDisplay(
-        const WearableDisplayState(mode: WearableDisplayMode.ready),
-      ),
-      throwsUnsupportedError,
+    expect(
+      await session.connectionStatuses.toList(),
+      [
+        WearableConnectionStatus.connected,
+        WearableConnectionStatus.disconnected,
+      ],
     );
+    final inputs = await session.inputEvents.toList();
+    expect(
+      inputs.map((event) => event.type),
+      [WearableInputType.primary, WearableInputType.cancel],
+    );
+    expect(inputs.map((event) => event.metadata['pressCount']), [1, 2]);
+  });
+
+  test('delegates capture without changing payload bytes', () async {
+    final operations = _FakeBrilliantOperations();
+    final session = BrilliantWearableSession.withOperations(operations);
+
+    await session.startCapture();
+    final capture = await session.stopCapture();
+    await session.cancelCapture();
+
+    expect(operations.beginCaptureCalls, 1);
+    expect(operations.finishCaptureCalls, 1);
+    expect(operations.cancelCaptureCalls, 1);
+    expect(capture.imageBytes, [1, 2, 3]);
+    expect(capture.audioBytes, [4, 5, 6]);
+    expect(capture.imageContentType, 'image/jpeg');
+    expect(capture.audioContentType, 'audio/L8');
+  });
+
+  test('delegates display intents, hold, and disposal', () async {
+    final operations = _FakeBrilliantOperations();
+    final session = BrilliantWearableSession.withOperations(operations);
+    const states = [
+      WearableDisplayState(mode: WearableDisplayMode.ready),
+      WearableDisplayState(mode: WearableDisplayMode.listening),
+      WearableDisplayState(mode: WearableDisplayMode.thinking),
+      WearableDisplayState(mode: WearableDisplayMode.reply),
+      WearableDisplayState(mode: WearableDisplayMode.disconnected),
+    ];
+
+    for (final state in states) {
+      await session.updateDisplay(state);
+    }
+    await session.holdDisplay();
+    await session.dispose();
+
+    expect(operations.displayStates, states);
+    expect(operations.holdDisplayCalls, 1);
+    expect(operations.disposeCalls, 1);
   });
 }
 
@@ -179,7 +229,9 @@ class _FakeBrilliantOperations implements BrilliantSessionOperations {
     this.firmwareCheckError,
     this.installError,
     this.firmwareUpdateError,
-  });
+    List<BrilliantSessionConnectionState> connectionStates = const [],
+    this.inputCounts = const [],
+  }) : _connectionStates = connectionStates;
 
   @override
   final BrilliantSessionDeviceMode deviceMode;
@@ -191,6 +243,8 @@ class _FakeBrilliantOperations implements BrilliantSessionOperations {
   final Object? firmwareCheckError;
   final Object? installError;
   final Object? firmwareUpdateError;
+  final List<BrilliantSessionConnectionState> _connectionStates;
+  final List<int> inputCounts;
 
   int stopApplicationCalls = 0;
   int hasCurrentApplicationCalls = 0;
@@ -200,6 +254,12 @@ class _FakeBrilliantOperations implements BrilliantSessionOperations {
   int resetDeviceCalls = 0;
   int resumeApplicationCalls = 0;
   int disconnectCalls = 0;
+  int beginCaptureCalls = 0;
+  int finishCaptureCalls = 0;
+  int cancelCaptureCalls = 0;
+  int holdDisplayCalls = 0;
+  int disposeCalls = 0;
+  final List<WearableDisplayState> displayStates = [];
 
   @override
   WearableDescriptor get descriptor => WearableDescriptor(
@@ -209,8 +269,42 @@ class _FakeBrilliantOperations implements BrilliantSessionOperations {
       );
 
   @override
-  Stream<WearableConnectionStatus> get connectionStatuses =>
-      const Stream.empty();
+  Stream<BrilliantSessionConnectionState> get connectionStates =>
+      Stream.fromIterable(_connectionStates);
+
+  @override
+  Stream<int> monitorInputCounts() => Stream.fromIterable(inputCounts);
+
+  @override
+  Future<void> beginCapture() async {
+    beginCaptureCalls++;
+  }
+
+  @override
+  Future<WearableCapture> finishCapture() async {
+    finishCaptureCalls++;
+    return WearableCapture(
+      imageBytes: Uint8List.fromList([1, 2, 3]),
+      audioBytes: Uint8List.fromList([4, 5, 6]),
+      imageContentType: 'image/jpeg',
+      audioContentType: 'audio/L8',
+    );
+  }
+
+  @override
+  Future<void> cancelCapture() async {
+    cancelCaptureCalls++;
+  }
+
+  @override
+  Future<void> showDisplay(WearableDisplayState state) async {
+    displayStates.add(state);
+  }
+
+  @override
+  Future<void> holdDisplay() async {
+    holdDisplayCalls++;
+  }
 
   @override
   Future<void> stopApplication() async {
@@ -271,5 +365,10 @@ class _FakeBrilliantOperations implements BrilliantSessionOperations {
   Future<void> disconnect() async {
     disconnectCalls++;
     await Future<void>.delayed(Duration.zero);
+  }
+
+  @override
+  Future<void> dispose() async {
+    disposeCalls++;
   }
 }

@@ -28,7 +28,13 @@ abstract interface class WearableSession {
 
   Future<WearableCapture> stopCapture();
 
+  /// Stops an active capture without waiting for captured content.
+  Future<void> cancelCapture();
+
   Future<void> updateDisplay(WearableDisplayState state);
+
+  /// Keeps the current device display active while work continues.
+  Future<void> holdDisplay();
 
   Future<void> disconnect();
 
