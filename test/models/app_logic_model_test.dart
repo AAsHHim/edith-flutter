@@ -206,6 +206,107 @@ void main() {
     model.dispose();
   });
 
+  testWidgets('mode-scoped pairing reads only its injected preference key',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'PairedDevice': 'hardware-frame-id',
+      'SimulatedPairedDevice': 'simulated-device-id',
+    });
+    final session = _FakeWearableSession([]);
+    final gateway = _FakeWearableGateway(session: session);
+    final model = AppLogicModel(
+      wearableGateway: gateway,
+      pairedDevicePreferenceKey: 'SimulatedPairedDevice',
+    );
+    model.state = StateMachine(State.disconnected);
+
+    model.triggerEvent(Event.init);
+    await tester.pumpAndSettle();
+
+    expect(gateway.reconnectCalls, 1);
+    expect(gateway.reconnectedStableId, 'simulated-device-id');
+
+    model.dispose();
+  });
+
+  testWidgets('simulator pairing key does not read hardware pairing',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'PairedDevice': 'hardware-frame-id',
+    });
+    final gateway = _FakeWearableGateway(session: _FakeWearableSession([]));
+    final model = AppLogicModel(
+      wearableGateway: gateway,
+      pairedDevicePreferenceKey: 'SimulatedPairedDevice',
+    );
+    model.state = StateMachine(State.disconnected);
+
+    model.triggerEvent(Event.init);
+    await tester.pumpAndSettle();
+
+    expect(gateway.reconnectCalls, 0);
+    expect(model.state.current, State.disconnected);
+
+    model.dispose();
+  });
+
+  testWidgets('hardware default does not read simulated pairing',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'SimulatedPairedDevice': 'simulated-device-id',
+    });
+    final gateway = _FakeWearableGateway(session: _FakeWearableSession([]));
+    final model = AppLogicModel(wearableGateway: gateway);
+    model.state = StateMachine(State.disconnected);
+
+    model.triggerEvent(Event.init);
+    await tester.pumpAndSettle();
+
+    expect(gateway.reconnectCalls, 0);
+    expect(model.state.current, State.disconnected);
+
+    model.dispose();
+  });
+
+  testWidgets('simulator pairing write leaves hardware pairing unchanged',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'PairedDevice': 'hardware-frame-id',
+    });
+    final model = AppLogicModel(
+      wearableGateway: _FakeWearableGateway(),
+      pairedDevicePreferenceKey: 'SimulatedPairedDevice',
+      wearableSession: _FakeWearableSession([
+        WearableSetupUpdate(
+          stage: WearableSetupStage.checkingDevice,
+          progress: 0,
+        ),
+        WearableSetupUpdate(
+          stage: WearableSetupStage.checkingDevice,
+          progress: 0.5,
+        ),
+        WearableSetupUpdate(
+          stage: WearableSetupStage.installingApplication,
+          progress: 0,
+        ),
+        WearableSetupUpdate(
+          stage: WearableSetupStage.ready,
+          progress: 1,
+        ),
+      ]),
+    );
+    model.state = StateMachine(State.stopLuaApp);
+
+    model.triggerEvent(Event.init);
+    await tester.pumpAndSettle();
+
+    final preferences = await SharedPreferences.getInstance();
+    expect(preferences.getString('PairedDevice'), 'hardware-frame-id');
+    expect(preferences.getString('SimulatedPairedDevice'), 'frame-test');
+
+    model.dispose();
+  });
+
   testWidgets('failure while stopping the Lua app requires repair',
       (tester) async {
     final model = AppLogicModel(
@@ -305,6 +406,7 @@ void main() {
     expect(model.state.current, State.uploadMainLua);
     expect(model.scriptProgress, 100);
     expect(preferences.getString('PairedDevice'), 'frame-test');
+    expect(preferences.getString('SimulatedPairedDevice'), isNull);
   });
 
   testWidgets(

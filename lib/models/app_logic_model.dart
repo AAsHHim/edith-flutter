@@ -99,14 +99,14 @@ class AppLogicModel extends ChangeNotifier {
 
   void _setPairedDevice(String token) {
     SharedPreferences.getInstance().then((value) async {
-      await value.setString("PairedDevice", token);
+      await value.setString(_pairedDevicePreferenceKey, token);
       triggerEvent(Event.loggedIn);
     });
   }
 
   Future<String?> _getPairedDevice() async {
     return await SharedPreferences.getInstance()
-        .then((value) => value.getString('PairedDevice'));
+        .then((value) => value.getString(_pairedDevicePreferenceKey));
   }
 
   // User's tune preferences
@@ -201,6 +201,7 @@ class AppLogicModel extends ChangeNotifier {
   StreamSubscription? _connectionStream;
   StreamSubscription<WearableSetupUpdate>? _setupSubscription;
   final WearableGateway _wearableGateway;
+  final String _pairedDevicePreferenceKey;
   WearableDescriptor? _nearbyDevice;
   WearableSession? _wearableSession;
   StreamSubscription<WearableInputEvent>? _inputSubscription;
@@ -235,8 +236,10 @@ class AppLogicModel extends ChangeNotifier {
 
   AppLogicModel({
     required WearableGateway wearableGateway,
+    String pairedDevicePreferenceKey = hardwarePairedDevicePreferenceKey,
     WearableSession? wearableSession,
   })  : _wearableGateway = wearableGateway,
+        _pairedDevicePreferenceKey = pairedDevicePreferenceKey,
         _wearableSession = wearableSession {
     // Uncomment to create AppStore images
     // noaMessages.add(NoaMessage(
@@ -797,5 +800,6 @@ class AppLogicModel extends ChangeNotifier {
 final model = ChangeNotifierProvider<AppLogicModel>((ref) {
   return AppLogicModel(
     wearableGateway: ref.watch(wearableGatewayProvider),
+    pairedDevicePreferenceKey: ref.watch(pairedDevicePreferenceKeyProvider),
   );
 });

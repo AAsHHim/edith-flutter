@@ -6,6 +6,18 @@ import 'wearable_gateway.dart';
 
 final deviceModeProvider = Provider<DeviceMode>((ref) => DeviceMode.current);
 
+const hardwarePairedDevicePreferenceKey = 'PairedDevice';
+const simulatedPairedDevicePreferenceKey = 'SimulatedPairedDevice';
+
+final pairedDevicePreferenceKeyProvider = Provider<String>((ref) {
+  switch (ref.watch(deviceModeProvider)) {
+    case DeviceMode.hardware:
+      return hardwarePairedDevicePreferenceKey;
+    case DeviceMode.simulator:
+      return simulatedPairedDevicePreferenceKey;
+  }
+});
+
 final wearableGatewayProvider = Provider<WearableGateway>((ref) {
   switch (ref.watch(deviceModeProvider)) {
     case DeviceMode.hardware:

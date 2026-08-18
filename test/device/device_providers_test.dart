@@ -36,4 +36,30 @@ void main() {
       ),
     );
   });
+
+  test('hardware mode selects the backward-compatible pairing key', () {
+    final container = ProviderContainer(
+      overrides: [
+        deviceModeProvider.overrideWithValue(DeviceMode.hardware),
+      ],
+    );
+
+    expect(
+      container.read(pairedDevicePreferenceKeyProvider),
+      'PairedDevice',
+    );
+  });
+
+  test('simulator mode selects an isolated pairing key', () {
+    final container = ProviderContainer(
+      overrides: [
+        deviceModeProvider.overrideWithValue(DeviceMode.simulator),
+      ],
+    );
+
+    expect(
+      container.read(pairedDevicePreferenceKeyProvider),
+      'SimulatedPairedDevice',
+    );
+  });
 }
