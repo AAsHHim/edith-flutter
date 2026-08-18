@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:noa/device/brilliant/brilliant_wearable_gateway.dart';
 import 'package:noa/device/device_mode.dart';
 import 'package:noa/device/device_providers.dart';
+import 'package:noa/device/simulator/simulated_wearable_gateway.dart';
 
 void main() {
   test('hardware mode composes the Brilliant gateway', () {
@@ -18,22 +19,25 @@ void main() {
     );
   });
 
-  test('explicit simulator mode fails instead of falling back to hardware', () {
+  test('simulator mode composes the simulated wearable gateway', () async {
     final container = ProviderContainer(
       overrides: [
         deviceModeProvider.overrideWithValue(DeviceMode.simulator),
       ],
     );
 
+    final gateway = container.read(wearableGatewayProvider);
+
+    expect(gateway, isA<SimulatedWearableGateway>());
+    await gateway.dispose();
+  });
+
+  test('default composition remains hardware', () {
+    final container = ProviderContainer();
+
     expect(
-      () => container.read(wearableGatewayProvider),
-      throwsA(
-        isA<UnsupportedError>().having(
-          (error) => error.message,
-          'message',
-          contains('Phase 2D'),
-        ),
-      ),
+      container.read(wearableGatewayProvider),
+      isA<BrilliantWearableGateway>(),
     );
   });
 

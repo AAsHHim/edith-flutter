@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:noa/device/wearable_gateway.dart';
 import 'package:noa/device/wearable_models.dart';
+import 'package:noa/device/simulator/simulated_wearable_gateway.dart';
 import 'package:noa/models/app_logic_model.dart';
 import 'package:noa/util/state_machine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -525,6 +526,91 @@ void main() {
     expect(session.displayStates.last.mode, WearableDisplayMode.ready);
 
     model.dispose();
+  });
+
+  testWidgets('simulator gateway runs discovery, connect, and setup workflow',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'PairedDevice': 'hardware-frame-id',
+    });
+    final gateway = SimulatedWearableGateway(
+      discoveryDelay: Duration.zero,
+      connectionDelay: Duration.zero,
+      setupDelay: Duration.zero,
+    );
+    final model = AppLogicModel(
+      wearableGateway: gateway,
+      pairedDevicePreferenceKey: 'SimulatedPairedDevice',
+    );
+    model.state = StateMachine(State.scanning);
+
+    model.triggerEvent(Event.init);
+    await tester.pumpAndSettle();
+
+    expect(model.state.current, State.found);
+    expect(model.deviceName, 'EDITH Halo Simulator');
+
+    model.triggerEvent(Event.buttonPressed);
+    await tester.pumpAndSettle();
+
+    final preferences = await SharedPreferences.getInstance();
+    expect(model.state.current, State.uploadMainLua);
+    expect(
+      preferences.getString('SimulatedPairedDevice'),
+      'edith-halo-simulator',
+    );
+    expect(preferences.getString('PairedDevice'), 'hardware-frame-id');
+
+    model.dispose();
+  });
+
+  testWidgets('simulator session drives primary, cancel, and disconnect',
+      (tester) async {
+    final gateway = SimulatedWearableGateway(
+      connectionDelay: Duration.zero,
+      setupDelay: Duration.zero,
+    );
+    final session = await tester.runAsync(
+      () => gateway.reconnect('edith-halo-simulator'),
+    );
+    final model = AppLogicModel(
+      wearableGateway: gateway,
+      pairedDevicePreferenceKey: 'SimulatedPairedDevice',
+      wearableSession: session,
+    );
+    model.state = StateMachine(State.connected);
+
+    model.triggerEvent(Event.init);
+    await tester.pump(const Duration(milliseconds: 800));
+    gateway.controller.injectPrimary();
+    await tester.pump();
+
+    expect(model.frameState, FrameState.listening);
+    expect(gateway.controller.captureActive, isTrue);
+    expect(
+      gateway.controller.latestDisplayState?.mode,
+      WearableDisplayMode.listening,
+    );
+
+    gateway.controller.injectCancel();
+    await tester.pump();
+
+    expect(model.frameState, FrameState.tapMeIn);
+    expect(gateway.controller.captureActive, isFalse);
+    expect(
+      gateway.controller.latestDisplayState?.mode,
+      WearableDisplayMode.ready,
+    );
+
+    gateway.controller.triggerDisconnect();
+    await tester.pump();
+
+    expect(model.state.current, State.disconnected);
+    expect(model.frameState, FrameState.disconnected);
+
+    model.dispose();
+    await tester.pump();
+    await gateway.dispose();
   });
 }
 
