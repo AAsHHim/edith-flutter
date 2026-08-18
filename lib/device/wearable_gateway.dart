@@ -20,7 +20,9 @@ abstract interface class WearableSession {
   Stream<WearableInputEvent> get inputEvents;
 
   /// Begins provisioning and emits semantic stage/progress updates.
-  Stream<WearableSetupUpdate> setup();
+  Stream<WearableSetupUpdate> setup({
+    WearableSetupMode mode = WearableSetupMode.provision,
+  });
 
   Future<void> startCapture();
 

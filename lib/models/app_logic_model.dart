@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,11 +6,13 @@ import 'package:flutter/foundation.dart';
 import 'package:frame_ble/brilliant_bluetooth.dart';
 import 'package:frame_ble/brilliant_connection_state.dart';
 import 'package:frame_ble/brilliant_device.dart';
-import 'package:frame_ble/brilliant_dfu_device.dart';
 import 'package:frame_ble/brilliant_scanned_device.dart';
 import 'package:frame_msg/frame_msg.dart';
 import 'package:logging/logging.dart';
 import 'package:noa/bluetooth.dart';
+import 'package:noa/device/brilliant/brilliant_wearable_session.dart';
+import 'package:noa/device/wearable_gateway.dart';
+import 'package:noa/device/wearable_models.dart';
 import 'package:noa/noa_api.dart';
 import 'package:noa/util/tx_rich_text.dart';
 import 'package:noa/util/state_machine.dart';
@@ -19,12 +20,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 final _log = Logger("App logic");
 
-// NOTE Update these when changing firmware or scripts
-const _firmwareVersion = "v25.080.0838";
-const _scriptVersion = "v1.0.8";
-
-const checkFwVersionFlag = 0x16;
-const checkScriptVersionFlag = 0x17;
 const messageResponseFlag = 0x20;
 const imageResponseFlag = 0x21;
 const singleDataFlag = 0x22;
@@ -33,7 +28,6 @@ const tapFLag = 0x10;
 const stopTapFlag = 0x13;
 const startListeningFlag = 0x11;
 const stopListeningFlag = 0x12;
-const loopAheadFlag = 0x14;
 
 enum State {
   getUserSettings,
@@ -132,10 +126,6 @@ class AppLogicModel extends ChangeNotifier {
         .then((value) => value.getString('PairedDevice'));
   }
 
-  List<String> _filterLuaFiles(List<String> files) {
-    return files.where((name) => name.endsWith('.lua')).toList();
-  }
-
   // User's tune preferences
   String _tunePrompt = "";
   String get tunePrompt => _tunePrompt;
@@ -227,11 +217,13 @@ class AppLogicModel extends ChangeNotifier {
   StreamSubscription? _scanStream;
   StreamSubscription? _connectionStream;
   StreamSubscription? _luaResponseStream;
-  StreamSubscription? _dataResponseStream;
+  StreamSubscription<WearableSetupUpdate>? _setupSubscription;
   BrilliantScannedDevice? _nearbyDevice;
   BrilliantDevice? _connectedDevice;
-  BrilliantDfuDevice? _updatableDevice;
+  WearableSession? _wearableSession;
   StreamSubscription<int>? _tapSubs;
+  bool _setupActive = false;
+  bool _restartProvisioningOnSetupDone = false;
   bool _cancelled = false;
   // List<int> _audioData = List.empty(growable: true);
   // List<int> _imageData = List.empty(growable: true);
@@ -271,7 +263,8 @@ class AppLogicModel extends ChangeNotifier {
     return prompt;
   }
 
-  AppLogicModel() {
+  AppLogicModel({WearableSession? wearableSession})
+      : _wearableSession = wearableSession {
     // Uncomment to create AppStore images
     // noaMessages.add(NoaMessage(
     //   message: "Recommend me some pizza places I near Union Square",
@@ -308,7 +301,8 @@ class AppLogicModel extends ChangeNotifier {
       ));
 
       noaMessages.add(NoaMessage(
-          message: "Use the assistant control on your connected glasses to wake me.",
+          message:
+              "Use the assistant control on your connected glasses to wake me.",
           from: NoaRole.noa,
           time: DateTime.now(),
           image: (await rootBundle.load('assets/images/tutorial/wake_up.png'))
@@ -355,6 +349,109 @@ class AppLogicModel extends ChangeNotifier {
               .asUint8List(),
           exclude: true));
     }();
+  }
+
+  Future<void> _beginSetup(WearableSetupMode mode) async {
+    await _setupSubscription?.cancel();
+    _setupActive = true;
+    _restartProvisioningOnSetupDone = false;
+    _setupSubscription = _wearableSession!.setup(mode: mode).listen(
+      _handleSetupUpdate,
+      onError: (Object error) {
+        _log.warning('Unexpected wearable setup stream error: $error');
+        triggerEvent(Event.error);
+      },
+      onDone: _handleSetupDone,
+      cancelOnError: true,
+    );
+  }
+
+  void _handleSetupUpdate(WearableSetupUpdate update) {
+    final failure = update.failure;
+    if (failure != null) {
+      if (failure.kind == WearableFailureKind.recoverable) {
+        _restartProvisioningOnSetupDone = true;
+        triggerEvent(Event.deviceNeedsUpdate);
+      } else if (state.current == State.connect) {
+        triggerEvent(Event.deviceInvalid);
+      } else {
+        triggerEvent(Event.error);
+      }
+      return;
+    }
+
+    switch (state.current) {
+      case State.connect:
+        if (update.stage == WearableSetupStage.checkingDevice) {
+          triggerEvent(Event.deviceConnected);
+        } else if (update.stage == WearableSetupStage.updatingFirmware) {
+          triggerEvent(Event.updatableDeviceConnected);
+        }
+        break;
+      case State.stopLuaApp:
+        if (update.stage == WearableSetupStage.checkingDevice &&
+            (update.progress ?? 0) >= 0.5) {
+          triggerEvent(Event.done);
+        }
+        break;
+      case State.checkFirmwareVersion:
+        if (update.stage == WearableSetupStage.installingApplication) {
+          triggerEvent(Event.deviceUpToDate);
+        } else if (update.stage == WearableSetupStage.updatingFirmware) {
+          triggerEvent(Event.deviceNeedsUpdate);
+        }
+        break;
+      case State.uploadMainLua:
+        if (update.stage == WearableSetupStage.installingApplication) {
+          scriptProgress = (update.progress ?? 0) * 100;
+        } else if (update.isReady) {
+          _setPairedDevice(_wearableSession!.descriptor.stableId);
+        }
+        break;
+      case State.updateFirmware:
+        if (update.stage == WearableSetupStage.updatingFirmware) {
+          bluetoothUploadProgress = (update.progress ?? 0) * 100;
+        }
+        break;
+      case State.recheckFirmwareVersion:
+        if (update.stage == WearableSetupStage.checkingDevice &&
+            (update.progress ?? 0) >= 0.5) {
+          triggerEvent(Event.deviceUpToDate);
+        }
+        break;
+      case State.checkScriptVersion:
+        if (update.isReady) {
+          triggerEvent(Event.deviceUpToDate);
+        }
+        break;
+      default:
+        break;
+    }
+    notifyListeners();
+  }
+
+  void _handleSetupDone() {
+    _setupActive = false;
+    _setupSubscription = null;
+    if (state.current == State.triggerUpdate ||
+        state.current == State.updateFirmware) {
+      _startSetupScan();
+    } else if (_restartProvisioningOnSetupDone &&
+        state.current == State.stopLuaApp) {
+      _beginSetup(WearableSetupMode.provision);
+    }
+  }
+
+  Future<void> _startSetupScan() async {
+    try {
+      await _scanStream?.cancel();
+      _scanStream = BrilliantBluetooth.scan().listen((device) {
+        _nearbyDevice = device;
+        triggerEvent(Event.deviceFound);
+      });
+    } catch (error) {
+      triggerEvent(Event.error);
+    }
   }
 
   void triggerEvent(Event event) {
@@ -427,22 +524,10 @@ class AppLogicModel extends ChangeNotifier {
         case State.connect:
           state.onEntry(() async {
             try {
-  
               _connectedDevice =
                   await BrilliantBluetooth.connect(_nearbyDevice!);
-
-              switch (_connectedDevice!.state) {
-                case BrilliantConnectionState.connected:
-                  triggerEvent(Event.deviceConnected);
-                  break;
-                case BrilliantConnectionState.dfuConnected:
-                  _updatableDevice = BrilliantDfuDevice(device: _connectedDevice!.device, state: BrilliantConnectionState.dfuConnected);
-                  await _updatableDevice!.connect();
-                  triggerEvent(Event.updatableDeviceConnected);
-                  break;
-                default:
-                  throw ();
-              }
+              _wearableSession = BrilliantWearableSession(_connectedDevice!);
+              await _beginSetup(WearableSetupMode.provision);
             } catch (error) {
               var list_of_devices = FlutterBluePlus.connectedDevices;
               _log.warning(
@@ -457,13 +542,8 @@ class AppLogicModel extends ChangeNotifier {
 
         case State.stopLuaApp:
           state.onEntry(() async {
-            try {
-              await _connectedDevice!.sendBreakSignal();
-              triggerEvent(Event.done);
-            } catch (error) {
-              _log.warning("Error stopping lua app. $error");
-              await _connectedDevice?.disconnect();
-              triggerEvent(Event.error);
+            if (!_setupActive) {
+              await _beginSetup(WearableSetupMode.provision);
             }
           });
           state.changeOn(Event.done, State.checkFirmwareVersion);
@@ -471,107 +551,22 @@ class AppLogicModel extends ChangeNotifier {
           break;
 
         case State.checkFirmwareVersion:
-          state.onEntry(() async {
-            try {
-              final response = await _connectedDevice!
-                  .sendString("print(frame.FIRMWARE_VERSION)")
-                  .timeout(const Duration(seconds: 1));
-              if (response == _firmwareVersion) {
-                triggerEvent(Event.deviceUpToDate);
-              } else {
-                triggerEvent(Event.deviceNeedsUpdate);
-              }
-            } catch (_) {
-              triggerEvent(Event.error);
-            }
-          });
           state.changeOn(Event.deviceUpToDate, State.uploadMainLua);
           state.changeOn(Event.deviceNeedsUpdate, State.triggerUpdate);
           state.changeOn(Event.error, State.requiresRepair);
           break;
 
         case State.uploadMainLua:
-          state.onEntry(() async {
-            try {
-              List<String> luaFiles = _filterLuaFiles(
-                  (await AssetManifest.loadFromAssetBundle(rootBundle))
-                      .listAssets());
-
-              if (luaFiles.isNotEmpty) {
-                scriptProgress = 0;
-                for (var pathFile in luaFiles) {
-                  String fileName = pathFile.split('/').last;
-                  _log.info("Uploading $fileName");
-                  // send the lua script to the Frame
-                  await _connectedDevice!.uploadScript(
-                      fileName, await rootBundle.loadString(pathFile));
-                  // set the progress
-                  scriptProgress += (100 / luaFiles.length);
-                  notifyListeners();
-                }
-              }
-              await _connectedDevice!.sendResetSignal();
-              _setPairedDevice(_connectedDevice!.device.remoteId.toString());
-            } catch (error) {
-              await _connectedDevice?.disconnect();
-              _log.warning("Error uploading lua scripts. $error.");
-              triggerEvent(Event.error);
-            }
-          });
           state.changeOn(Event.error, State.disconnected);
           break;
 
         case State.triggerUpdate:
-          state.onEntry(() async {
-            try {
-              await _connectedDevice!.sendString(
-                "frame.update()",
-                awaitResponse: false,
-              );
-            } catch (error) {
-              _log.warning("Error triggering update. $error");
-              await _connectedDevice?.disconnect();
-              triggerEvent(Event.error);
-            }
-            await _scanStream?.cancel();
-            _scanStream = BrilliantBluetooth.scan().listen((device) {
-              _nearbyDevice = device;
-              triggerEvent(Event.deviceFound);
-            });
-          });
           state.changeOn(Event.deviceFound, State.connect,
               transitionTask: () async => await BrilliantBluetooth.stopScan());
           state.changeOn(Event.error, State.disconnected);
           break;
 
         case State.updateFirmware:
-          state.onEntry(() async {
-            _updatableDevice!
-                .updateFirmware("assets/frame-firmware-$_firmwareVersion.zip")
-                .listen(
-              (value) {
-                bluetoothUploadProgress = value;
-                notifyListeners();
-              },
-              onDone: () async {
-                try {
-                  await _scanStream?.cancel();
-                  _scanStream = BrilliantBluetooth.scan().listen((device) {
-                    _nearbyDevice = device;
-                    triggerEvent(Event.deviceFound);
-                  });
-                } catch (error) {
-                  triggerEvent(Event.error);
-                }
-              },
-              onError: (error) async {
-                _log.warning("Error updating firmware. $error");
-                await _connectedDevice?.disconnect();
-                triggerEvent(Event.error);
-              },
-              cancelOnError: true,
-            );
-          });
           state.changeOn(Event.deviceFound, State.connect);
           state.changeOn(Event.error, State.disconnected);
           break;
@@ -600,7 +595,9 @@ class AppLogicModel extends ChangeNotifier {
             _connectedDevice!
                 .sendMessage(singleDataFlag, TxCode(value: stopTapFlag).pack());
             _tapSubs?.cancel();
-            _tapSubs = RxTap(tapFlag: tapFLag, threshold: const Duration(milliseconds: 200))
+            _tapSubs = RxTap(
+                    tapFlag: tapFLag,
+                    threshold: const Duration(milliseconds: 200))
                 .attach(_connectedDevice!.dataResponse)
                 .listen((taps) async {
               if (taps == 1) {
@@ -614,8 +611,10 @@ class AppLogicModel extends ChangeNotifier {
                           .pack());
                   _cancelled = false;
                   if (_cancelled) return;
-                  _image = _rxPhoto.attach(_connectedDevice!.dataResponse).first;
-                  _audio = _rxAudio.attach(_connectedDevice!.dataResponse).first;
+                  _image =
+                      _rxPhoto.attach(_connectedDevice!.dataResponse).first;
+                  _audio =
+                      _rxAudio.attach(_connectedDevice!.dataResponse).first;
                   await _connectedDevice!.sendMessage(
                       startListeningFlag,
                       TxCaptureSettings(
@@ -644,8 +643,7 @@ class AppLogicModel extends ChangeNotifier {
                   // to avoid fram being sleep while waiting for the response
                   Future.delayed(const Duration(seconds: 5), () async {
                     await _connectedDevice!.sendMessage(
-                        singleDataFlag,
-                        TxCode(value: holdResponseFlag).pack());
+                        singleDataFlag, TxCode(value: holdResponseFlag).pack());
                   });
                   final newMessages = await NoaApi.getMessage(
                       (await _getUserAuthToken())!,
@@ -693,18 +691,15 @@ class AppLogicModel extends ChangeNotifier {
             // if its coming from disconnected state immediately show tap me in, if its coming from print reply wait for 5 seconds
             if (frameState == FrameState.printReply) {
               Future.delayed(const Duration(seconds: 10), () async {
-                await _connectedDevice!.sendMessage(
-                    messageResponseFlag,
+                await _connectedDevice!.sendMessage(messageResponseFlag,
                     TxRichText(text: "tap me in", emoji: "\u{F0000}").pack());
                 frameState = FrameState.tapMeIn;
               });
-            }else{
-
-            await _connectedDevice!.sendMessage(messageResponseFlag,
-                TxRichText(text: "tap me in", emoji: "\u{F0000}").pack());
-                frameState = FrameState.tapMeIn;
+            } else {
+              await _connectedDevice!.sendMessage(messageResponseFlag,
+                  TxRichText(text: "tap me in", emoji: "\u{F0000}").pack());
+              frameState = FrameState.tapMeIn;
             }
-
           });
           state.changeOn(Event.noaResponse, State.sendResponseToDevice);
           state.changeOn(Event.deviceDisconnected, State.disconnected);
@@ -740,6 +735,7 @@ class AppLogicModel extends ChangeNotifier {
                 _connectedDevice?.connectionState.listen((event) async {
               _connectedDevice = event;
               if (event.state == BrilliantConnectionState.connected) {
+                _wearableSession = BrilliantWearableSession(event);
                 triggerEvent(Event.deviceConnected);
               }
             });
@@ -753,6 +749,7 @@ class AppLogicModel extends ChangeNotifier {
               _log.warning("Error reconnecting to device. $error");
             }
             if (_connectedDevice?.state == BrilliantConnectionState.connected) {
+              _wearableSession = BrilliantWearableSession(_connectedDevice!);
               triggerEvent(Event.deviceConnected);
             }
           });
@@ -763,38 +760,7 @@ class AppLogicModel extends ChangeNotifier {
 
         case State.recheckFirmwareVersion:
           state.onEntry(() async {
-            _dataResponseStream?.cancel();
-            Timer? listenerTimeout;
-
-              listenerTimeout = Timer(const Duration(seconds: 2), () {
-                triggerEvent(Event.deviceNeedsUpdate);
-              });
-            _dataResponseStream =
-                _connectedDevice!.dataResponse.listen((event) async {
-                  listenerTimeout?.cancel();
-              final flag = event[0];
-              if (flag == checkFwVersionFlag) {
-                _log.info("Firmware version: ${utf8.decode(event.sublist(1))}");
-                if (utf8.decode(event.sublist(1)) == _firmwareVersion) {
-                  triggerEvent(Event.deviceUpToDate);
-                } else {
-                  triggerEvent(Event.deviceNeedsUpdate);
-                }
-              }
-            });
-            try {
-              await _connectedDevice!
-                  .sendMessage(
-                      singleDataFlag, TxCode(value: checkFwVersionFlag).pack())
-                  .timeout(const Duration(seconds: 1), onTimeout:  () async {
-                        _log.warning("Timeout checking firmware version");
-                      });
-            } catch (ex) {
-              _log.warning("Error checking firmware version. $ex");
-              listenerTimeout.cancel();
-              triggerEvent(Event.error);
-            }
-            
+            await _beginSetup(WearableSetupMode.validate);
           });
 
           state.changeOn(Event.deviceUpToDate, State.checkScriptVersion);
@@ -805,32 +771,6 @@ class AppLogicModel extends ChangeNotifier {
           break;
 
         case State.checkScriptVersion:
-          state.onEntry(() async {
-            _dataResponseStream?.cancel();
-            _dataResponseStream =
-                _connectedDevice!.dataResponse.listen((event) async {
-              final flag = event[0];
-              if (flag == checkScriptVersionFlag) {
-                _log.info("Script version: ${utf8.decode(event.sublist(1))}");
-                if (utf8.decode(event.sublist(1)) == _scriptVersion) {
-                  triggerEvent(Event.deviceUpToDate);
-                  await Future.delayed(const Duration(milliseconds: 800));
-                  _connectedDevice!.sendMessage(singleDataFlag, TxCode(value: loopAheadFlag).pack());
-                } else {
-                  triggerEvent(Event.deviceNeedsUpdate);
-                }
-              }
-            });
-            try {
-              await _connectedDevice!
-                  .sendMessage(singleDataFlag,
-                      TxCode(value: checkScriptVersionFlag).pack())
-                  .timeout(const Duration(seconds: 1));
-            } catch (_) {
-              _log.warning("Error checking script version.");
-              triggerEvent(Event.error);
-            }
-          });
           state.changeOn(Event.deviceUpToDate, State.connected);
           state.changeOn(Event.deviceNeedsUpdate, State.stopLuaApp);
           state.changeOn(Event.error, State.stopLuaApp);
@@ -880,8 +820,9 @@ class AppLogicModel extends ChangeNotifier {
     _scanStream?.cancel();
     _connectionStream?.cancel();
     _luaResponseStream?.cancel();
-    _dataResponseStream?.cancel();
+    _setupSubscription?.cancel();
     _tapSubs?.cancel();
+    _wearableSession?.dispose();
 
     super.dispose();
   }

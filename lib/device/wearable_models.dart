@@ -71,6 +71,11 @@ enum WearableSetupStage {
   repairRequired,
 }
 
+enum WearableSetupMode {
+  provision,
+  validate,
+}
+
 enum WearableFailureKind {
   recoverable,
   repairRequired,
