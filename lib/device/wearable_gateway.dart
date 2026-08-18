@@ -9,7 +9,7 @@ abstract interface class WearableGateway {
 
   Future<WearableSession> connect(WearableDescriptor descriptor);
 
-  Future<WearableSession> reconnect(String identifier);
+  Future<WearableSession> reconnect(String stableId);
 }
 
 abstract interface class WearableSession {
@@ -19,7 +19,8 @@ abstract interface class WearableSession {
 
   Stream<WearableInputEvent> get inputEvents;
 
-  Stream<WearableSetupStage> setup();
+  /// Begins provisioning and emits semantic stage/progress updates.
+  Stream<WearableSetupUpdate> setup();
 
   Future<void> startCapture();
 

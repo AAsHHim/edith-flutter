@@ -7,7 +7,7 @@ void main() {
   group('WearableDescriptor', () {
     test('reports only declared capabilities', () {
       final descriptor = WearableDescriptor(
-        identifier: 'wearable-1',
+        stableId: 'wearable-1',
         displayName: 'Test wearable',
         transport: WearableTransport.simulator,
         capabilities: const {
@@ -22,7 +22,7 @@ void main() {
 
     test('uses value equality independent of capability order', () {
       final first = WearableDescriptor(
-        identifier: 'wearable-1',
+        stableId: 'wearable-1',
         displayName: 'Test wearable',
         transport: WearableTransport.simulator,
         capabilities: const {
@@ -31,7 +31,7 @@ void main() {
         },
       );
       final second = WearableDescriptor(
-        identifier: 'wearable-1',
+        stableId: 'wearable-1',
         displayName: 'Test wearable',
         transport: WearableTransport.simulator,
         capabilities: const {
@@ -42,6 +42,95 @@ void main() {
 
       expect(first, second);
       expect(first.hashCode, second.hashCode);
+    });
+
+    test('exposes a stable identifier for reconnect', () {
+      final descriptor = WearableDescriptor(
+        stableId: 'persistent-device-id',
+        displayName: 'Test wearable',
+        transport: WearableTransport.bluetoothLowEnergy,
+      );
+
+      expect(descriptor.stableId, 'persistent-device-id');
+    });
+  });
+
+  group('WearableSetupUpdate', () {
+    test('represents semantic stages and normalized progress', () {
+      final update = WearableSetupUpdate(
+        stage: WearableSetupStage.updatingFirmware,
+        progress: 0.5,
+      );
+
+      expect(update.stage, WearableSetupStage.updatingFirmware);
+      expect(update.progress, 0.5);
+      expect(update.isReady, isFalse);
+      expect(update.requiresRepair, isFalse);
+    });
+
+    test('accepts progress boundaries', () {
+      expect(
+        WearableSetupUpdate(
+          stage: WearableSetupStage.installingApplication,
+          progress: 0,
+        ).progress,
+        0,
+      );
+      expect(
+        WearableSetupUpdate(
+          stage: WearableSetupStage.ready,
+          progress: 1,
+        ).progress,
+        1,
+      );
+    });
+
+    test('rejects progress outside the normalized range', () {
+      expect(
+        () => WearableSetupUpdate(
+          stage: WearableSetupStage.updatingFirmware,
+          progress: -0.01,
+        ),
+        throwsRangeError,
+      );
+      expect(
+        () => WearableSetupUpdate(
+          stage: WearableSetupStage.updatingFirmware,
+          progress: 1.01,
+        ),
+        throwsRangeError,
+      );
+      expect(
+        () => WearableSetupUpdate(
+          stage: WearableSetupStage.updatingFirmware,
+          progress: double.nan,
+        ),
+        throwsRangeError,
+      );
+    });
+
+    test('distinguishes ready, repair, recoverable, and disconnected states',
+        () {
+      final ready = WearableSetupUpdate(stage: WearableSetupStage.ready);
+      final repair = WearableSetupUpdate(
+        stage: WearableSetupStage.repairRequired,
+        failure: const WearableFailure(
+          kind: WearableFailureKind.repairRequired,
+        ),
+      );
+      final recoverable = WearableSetupUpdate(
+        stage: WearableSetupStage.checkingDevice,
+        failure: const WearableFailure(kind: WearableFailureKind.recoverable),
+      );
+      final disconnected = WearableSetupUpdate(
+        stage: WearableSetupStage.checkingDevice,
+        failure: const WearableFailure(kind: WearableFailureKind.disconnected),
+      );
+
+      expect(ready.isReady, isTrue);
+      expect(repair.requiresRepair, isTrue);
+      expect(recoverable.failure?.kind, WearableFailureKind.recoverable);
+      expect(disconnected.failure?.kind, WearableFailureKind.disconnected);
     });
   });
 
@@ -57,6 +146,32 @@ void main() {
     expect(event.metadata['pressKind'], 'long');
   });
 
+  test('input metadata can describe single, double, and long presses', () {
+    final occurredAt = DateTime.utc(2026, 8, 17);
+    final events = [
+      WearableInputEvent(
+        type: WearableInputType.primary,
+        occurredAt: occurredAt,
+        metadata: const {'pressKind': 'single', 'clickCount': 1},
+      ),
+      WearableInputEvent(
+        type: WearableInputType.primary,
+        occurredAt: occurredAt,
+        metadata: const {'pressKind': 'double', 'clickCount': 2},
+      ),
+      WearableInputEvent(
+        type: WearableInputType.primary,
+        occurredAt: occurredAt,
+        metadata: const {'pressKind': 'long', 'durationMs': 650},
+      ),
+    ];
+
+    expect(
+      events.map((event) => event.metadata['pressKind']),
+      ['single', 'double', 'long'],
+    );
+  });
+
   test('display states use value equality', () {
     const first = WearableDisplayState(
       mode: WearableDisplayMode.reply,
@@ -70,6 +185,8 @@ void main() {
     );
 
     expect(first, second);
+    expect(first.primaryText, 'Done');
+    expect(first.status, 'success');
   });
 
   test('capture records optional media and content types', () {

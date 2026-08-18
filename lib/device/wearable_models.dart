@@ -21,13 +21,14 @@ enum WearableCapability {
 @immutable
 class WearableDescriptor {
   WearableDescriptor({
-    required this.identifier,
+    required this.stableId,
     required this.displayName,
     required this.transport,
     Set<WearableCapability> capabilities = const {},
   }) : capabilities = UnmodifiableSetView(Set.of(capabilities));
 
-  final String identifier;
+  /// Stable identifier used to reconnect to this wearable across sessions.
+  final String stableId;
   final String displayName;
   final WearableTransport transport;
   final Set<WearableCapability> capabilities;
@@ -39,14 +40,14 @@ class WearableDescriptor {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is WearableDescriptor &&
-          identifier == other.identifier &&
+          stableId == other.stableId &&
           displayName == other.displayName &&
           transport == other.transport &&
           setEquals(capabilities, other.capabilities);
 
   @override
   int get hashCode => Object.hash(
-        identifier,
+        stableId,
         displayName,
         transport,
         Object.hashAllUnordered(capabilities),
@@ -68,6 +69,70 @@ enum WearableSetupStage {
   installingApplication,
   ready,
   repairRequired,
+}
+
+enum WearableFailureKind {
+  recoverable,
+  repairRequired,
+  disconnected,
+}
+
+@immutable
+class WearableFailure {
+  const WearableFailure({
+    required this.kind,
+    this.message,
+  });
+
+  final WearableFailureKind kind;
+  final String? message;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WearableFailure &&
+          kind == other.kind &&
+          message == other.message;
+
+  @override
+  int get hashCode => Object.hash(kind, message);
+}
+
+@immutable
+class WearableSetupUpdate {
+  WearableSetupUpdate({
+    required this.stage,
+    this.progress,
+    this.failure,
+  }) {
+    if (progress != null &&
+        (!progress!.isFinite || progress! < 0 || progress! > 1)) {
+      throw RangeError.range(progress!, 0, 1, 'progress');
+    }
+  }
+
+  final WearableSetupStage stage;
+
+  /// Optional normalized progress from 0.0 to 1.0 for the current stage.
+  final double? progress;
+  final WearableFailure? failure;
+
+  bool get isReady => stage == WearableSetupStage.ready && failure == null;
+
+  bool get requiresRepair =>
+      stage == WearableSetupStage.repairRequired ||
+      failure?.kind == WearableFailureKind.repairRequired;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WearableSetupUpdate &&
+          stage == other.stage &&
+          progress == other.progress &&
+          failure == other.failure;
+
+  @override
+  int get hashCode => Object.hash(stage, progress, failure);
 }
 
 enum WearableInputType {
