@@ -1,5 +1,22 @@
 import 'wearable_models.dart';
 
+enum WearableGatewayFailureKind {
+  permission,
+  discovery,
+  connection,
+  reconnection,
+}
+
+class WearableGatewayException implements Exception {
+  const WearableGatewayException(this.kind, this.message);
+
+  final WearableGatewayFailureKind kind;
+  final String message;
+
+  @override
+  String toString() => 'WearableGatewayException($kind): $message';
+}
+
 abstract interface class WearableGateway {
   Future<void> requestPermissions();
 
@@ -10,6 +27,8 @@ abstract interface class WearableGateway {
   Future<WearableSession> connect(WearableDescriptor descriptor);
 
   Future<WearableSession> reconnect(String stableId);
+
+  Future<void> dispose();
 }
 
 abstract interface class WearableSession {

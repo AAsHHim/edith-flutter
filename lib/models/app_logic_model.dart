@@ -1,15 +1,9 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
-import 'package:frame_ble/brilliant_bluetooth.dart';
-import 'package:frame_ble/brilliant_connection_state.dart';
-import 'package:frame_ble/brilliant_device.dart';
-import 'package:frame_ble/brilliant_scanned_device.dart';
 import 'package:logging/logging.dart';
-import 'package:noa/bluetooth.dart';
-import 'package:noa/device/brilliant/brilliant_wearable_session.dart';
+import 'package:noa/device/device_providers.dart';
 import 'package:noa/device/wearable_gateway.dart';
 import 'package:noa/device/wearable_models.dart';
 import 'package:noa/noa_api.dart';
@@ -206,8 +200,8 @@ class AppLogicModel extends ChangeNotifier {
   StreamSubscription? _scanStream;
   StreamSubscription? _connectionStream;
   StreamSubscription<WearableSetupUpdate>? _setupSubscription;
-  BrilliantScannedDevice? _nearbyDevice;
-  BrilliantDevice? _connectedDevice;
+  final WearableGateway _wearableGateway;
+  WearableDescriptor? _nearbyDevice;
   WearableSession? _wearableSession;
   StreamSubscription<WearableInputEvent>? _inputSubscription;
   bool _setupActive = false;
@@ -239,8 +233,11 @@ class AppLogicModel extends ChangeNotifier {
     return prompt;
   }
 
-  AppLogicModel({WearableSession? wearableSession})
-      : _wearableSession = wearableSession {
+  AppLogicModel({
+    required WearableGateway wearableGateway,
+    WearableSession? wearableSession,
+  })  : _wearableGateway = wearableGateway,
+        _wearableSession = wearableSession {
     // Uncomment to create AppStore images
     // noaMessages.add(NoaMessage(
     //   message: "Recommend me some pizza places I near Union Square",
@@ -421,10 +418,10 @@ class AppLogicModel extends ChangeNotifier {
   Future<void> _startSetupScan() async {
     try {
       await _scanStream?.cancel();
-      _scanStream = BrilliantBluetooth.scan().listen((device) {
+      _scanStream = _wearableGateway.discover().listen((device) {
         _nearbyDevice = device;
         triggerEvent(Event.deviceFound);
-      });
+      }, onError: (_) => triggerEvent(Event.error));
     } catch (error) {
       triggerEvent(Event.error);
     }
@@ -479,35 +476,31 @@ class AppLogicModel extends ChangeNotifier {
         case State.scanning:
           state.onEntry(() async {
             await _scanStream?.cancel();
-            _scanStream = BrilliantBluetooth.scan().listen((device) {
+            _scanStream = _wearableGateway.discover().listen((device) {
               _nearbyDevice = device;
-              deviceName = device.device.advName;
+              deviceName = device.displayName;
               triggerEvent(Event.deviceFound);
-            });
+            }, onError: (_) => triggerEvent(Event.error));
           });
           state.changeOn(Event.deviceFound, State.found);
           state.changeOn(Event.cancelPressed, State.disconnected,
-              transitionTask: () async => await BrilliantBluetooth.stopScan());
+              transitionTask: _wearableGateway.stopDiscovery);
           break;
 
         case State.found:
           state.changeOn(Event.deviceLost, State.scanning);
           state.changeOn(Event.buttonPressed, State.connect);
           state.changeOn(Event.cancelPressed, State.disconnected,
-              transitionTask: () async => await BrilliantBluetooth.stopScan());
+              transitionTask: _wearableGateway.stopDiscovery);
           break;
 
         case State.connect:
           state.onEntry(() async {
             try {
-              _connectedDevice =
-                  await BrilliantBluetooth.connect(_nearbyDevice!);
-              _wearableSession = BrilliantWearableSession(_connectedDevice!);
+              _wearableSession = await _wearableGateway.connect(_nearbyDevice!);
               await _beginSetup(WearableSetupMode.provision);
             } catch (error) {
-              var list_of_devices = FlutterBluePlus.connectedDevices;
-              _log.warning(
-                  "Error connecting to device. $error. List of devices: $list_of_devices");
+              _log.warning("Error connecting to device. $error");
               triggerEvent(Event.deviceInvalid);
             }
           });
@@ -538,7 +531,7 @@ class AppLogicModel extends ChangeNotifier {
 
         case State.triggerUpdate:
           state.changeOn(Event.deviceFound, State.connect,
-              transitionTask: () async => await BrilliantBluetooth.stopScan());
+              transitionTask: _wearableGateway.stopDiscovery);
           state.changeOn(Event.error, State.disconnected);
           break;
 
@@ -716,15 +709,15 @@ class AppLogicModel extends ChangeNotifier {
               onError: (_) {},
             );
 
-            try {
-              _connectedDevice ??= await BrilliantBluetooth.reconnect(
-                  (await _getPairedDevice())!);
-            } catch (error) {
-              _log.warning("Error reconnecting to device. $error");
-            }
-            if (_connectedDevice?.state == BrilliantConnectionState.connected) {
-              _wearableSession = BrilliantWearableSession(_connectedDevice!);
-              triggerEvent(Event.deviceConnected);
+            if (_wearableSession == null) {
+              try {
+                _wearableSession = await _wearableGateway.reconnect(
+                  (await _getPairedDevice())!,
+                );
+                triggerEvent(Event.deviceConnected);
+              } catch (error) {
+                _log.warning("Error reconnecting to device. $error");
+              }
             }
           });
           state.changeOn(Event.deviceConnected, State.recheckFirmwareVersion);
@@ -790,7 +783,7 @@ class AppLogicModel extends ChangeNotifier {
 
   @override
   void dispose() {
-    BrilliantBluetooth.stopScan();
+    _wearableGateway.stopDiscovery();
     _scanStream?.cancel();
     _connectionStream?.cancel();
     _setupSubscription?.cancel();
@@ -802,5 +795,7 @@ class AppLogicModel extends ChangeNotifier {
 }
 
 final model = ChangeNotifierProvider<AppLogicModel>((ref) {
-  return AppLogicModel();
+  return AppLogicModel(
+    wearableGateway: ref.watch(wearableGatewayProvider),
+  );
 });

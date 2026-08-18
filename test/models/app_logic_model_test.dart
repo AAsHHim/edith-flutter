@@ -16,7 +16,7 @@ void main() {
 
   testWidgets('starts in the existing application and device state',
       (tester) async {
-    final model = AppLogicModel();
+    final model = AppLogicModel(wearableGateway: _FakeWearableGateway());
 
     expect(model.state.current, State.getUserSettings);
     expect(model.frameState, FrameState.disconnected);
@@ -34,7 +34,7 @@ void main() {
 
   testWidgets('initialization without login or pairing waits for login',
       (tester) async {
-    final model = AppLogicModel();
+    final model = AppLogicModel(wearableGateway: _FakeWearableGateway());
 
     model.triggerEvent(Event.init);
     await tester.pumpAndSettle();
@@ -77,7 +77,7 @@ void main() {
   });
 
   test('represents a discovered device with found state and device name', () {
-    final model = AppLogicModel();
+    final model = AppLogicModel(wearableGateway: _FakeWearableGateway());
     model.deviceName = 'Frame Test';
     model.state = StateMachine(State.found);
 
@@ -85,9 +85,131 @@ void main() {
     expect(model.deviceName, 'Frame Test');
   });
 
+  testWidgets('gateway discovery moves scanning to found', (tester) async {
+    final gateway = _FakeWearableGateway();
+    final model = AppLogicModel(wearableGateway: gateway);
+    final descriptor = WearableDescriptor(
+      stableId: 'frame-discovered',
+      displayName: 'Frame Discovered',
+      transport: WearableTransport.bluetoothLowEnergy,
+    );
+    model.state = StateMachine(State.scanning);
+
+    model.triggerEvent(Event.init);
+    await tester.pump();
+    gateway.emitDiscovery(descriptor);
+    await tester.pump();
+
+    expect(gateway.discoverCalls, 1);
+    expect(model.state.current, State.found);
+    expect(model.deviceName, 'Frame Discovered');
+
+    model.dispose();
+  });
+
+  testWidgets('found device connects once and begins session setup',
+      (tester) async {
+    final session = _FakeWearableSession([
+      WearableSetupUpdate(
+        stage: WearableSetupStage.checkingDevice,
+        progress: 0,
+      ),
+    ]);
+    final gateway = _FakeWearableGateway(session: session);
+    final model = AppLogicModel(wearableGateway: gateway);
+    final descriptor = WearableDescriptor(
+      stableId: 'frame-connect',
+      displayName: 'Frame Connect',
+      transport: WearableTransport.bluetoothLowEnergy,
+    );
+    model.state = StateMachine(State.scanning);
+
+    model.triggerEvent(Event.init);
+    await tester.pump();
+    gateway.emitDiscovery(descriptor);
+    await tester.pump();
+    model.triggerEvent(Event.buttonPressed);
+    await tester.pumpAndSettle();
+
+    expect(gateway.connectCalls, 1);
+    expect(gateway.connectedDescriptor, descriptor);
+    expect(session.setupCalls, 1);
+    expect(session.setupModes, [WearableSetupMode.provision]);
+    expect(model.state.current, State.stopLuaApp);
+
+    model.dispose();
+  });
+
+  testWidgets('failed gateway connection requires repair', (tester) async {
+    final gateway = _FakeWearableGateway(
+      connectError: StateError('connect failed'),
+    );
+    final model = AppLogicModel(wearableGateway: gateway);
+    final descriptor = WearableDescriptor(
+      stableId: 'frame-failed',
+      displayName: 'Frame Failed',
+      transport: WearableTransport.bluetoothLowEnergy,
+    );
+    model.state = StateMachine(State.scanning);
+
+    model.triggerEvent(Event.init);
+    await tester.pump();
+    gateway.emitDiscovery(descriptor);
+    await tester.pump();
+    model.triggerEvent(Event.buttonPressed);
+    await tester.pumpAndSettle();
+
+    expect(gateway.connectCalls, 1);
+    expect(model.state.current, State.requiresRepair);
+
+    model.dispose();
+  });
+
+  testWidgets('disconnected state reconnects using persisted stable id',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'PairedDevice': 'persisted-frame-id',
+    });
+    final session = _FakeWearableSession([]);
+    final gateway = _FakeWearableGateway(session: session);
+    final model = AppLogicModel(wearableGateway: gateway);
+    model.state = StateMachine(State.disconnected);
+
+    model.triggerEvent(Event.init);
+    await tester.pumpAndSettle();
+
+    expect(gateway.reconnectCalls, 1);
+    expect(gateway.reconnectedStableId, 'persisted-frame-id');
+    expect(session.setupCalls, 1);
+    expect(session.setupModes, [WearableSetupMode.validate]);
+    expect(model.state.current, State.recheckFirmwareVersion);
+
+    model.dispose();
+  });
+
+  testWidgets('failed reconnect remains disconnected', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'PairedDevice': 'persisted-frame-id',
+    });
+    final gateway = _FakeWearableGateway(
+      reconnectError: StateError('reconnect failed'),
+    );
+    final model = AppLogicModel(wearableGateway: gateway);
+    model.state = StateMachine(State.disconnected);
+
+    model.triggerEvent(Event.init);
+    await tester.pumpAndSettle();
+
+    expect(gateway.reconnectCalls, 1);
+    expect(model.state.current, State.disconnected);
+
+    model.dispose();
+  });
+
   testWidgets('failure while stopping the Lua app requires repair',
       (tester) async {
     final model = AppLogicModel(
+      wearableGateway: _FakeWearableGateway(),
       wearableSession: _FakeWearableSession([
         WearableSetupUpdate(
           stage: WearableSetupStage.checkingDevice,
@@ -112,6 +234,7 @@ void main() {
   testWidgets('application installation failure returns to disconnected',
       (tester) async {
     final model = AppLogicModel(
+      wearableGateway: _FakeWearableGateway(),
       wearableSession: _FakeWearableSession([
         WearableSetupUpdate(
           stage: WearableSetupStage.checkingDevice,
@@ -145,6 +268,7 @@ void main() {
       'successful setup maps progress and persists the stable device id',
       (tester) async {
     final model = AppLogicModel(
+      wearableGateway: _FakeWearableGateway(),
       wearableSession: _FakeWearableSession([
         WearableSetupUpdate(
           stage: WearableSetupStage.checkingDevice,
@@ -186,7 +310,7 @@ void main() {
   testWidgets(
       'disconnected state without a paired identifier stays disconnected',
       (tester) async {
-    final model = AppLogicModel();
+    final model = AppLogicModel(wearableGateway: _FakeWearableGateway());
     model.frameState = FrameState.printReply;
     model.state = StateMachine(State.disconnected);
 
@@ -200,7 +324,10 @@ void main() {
   testWidgets('primary actions move from ready to listening then thinking',
       (tester) async {
     final session = _FakeWearableSession([]);
-    final model = AppLogicModel(wearableSession: session);
+    final model = AppLogicModel(
+      wearableGateway: _FakeWearableGateway(),
+      wearableSession: session,
+    );
     model.state = StateMachine(State.connected);
 
     model.triggerEvent(Event.init);
@@ -228,7 +355,10 @@ void main() {
 
   testWidgets('cancel restores ready and cancels capture', (tester) async {
     final session = _FakeWearableSession([]);
-    final model = AppLogicModel(wearableSession: session);
+    final model = AppLogicModel(
+      wearableGateway: _FakeWearableGateway(),
+      wearableSession: session,
+    );
     model.state = StateMachine(State.connected);
 
     model.triggerEvent(Event.init);
@@ -248,7 +378,10 @@ void main() {
   testWidgets('session disconnect moves connected workflow to disconnected',
       (tester) async {
     final session = _FakeWearableSession([]);
-    final model = AppLogicModel(wearableSession: session);
+    final model = AppLogicModel(
+      wearableGateway: _FakeWearableGateway(),
+      wearableSession: session,
+    );
     model.state = StateMachine(State.connected);
 
     model.triggerEvent(Event.init);
@@ -265,7 +398,10 @@ void main() {
   testWidgets('assistant reply returns to ready after existing delay',
       (tester) async {
     final session = _FakeWearableSession([]);
-    final model = AppLogicModel(wearableSession: session);
+    final model = AppLogicModel(
+      wearableGateway: _FakeWearableGateway(),
+      wearableSession: session,
+    );
     await tester.pumpAndSettle();
     model.state = StateMachine(State.sendResponseToDevice);
 
@@ -290,6 +426,67 @@ void main() {
   });
 }
 
+class _FakeWearableGateway implements WearableGateway {
+  _FakeWearableGateway({
+    this.session,
+    this.connectError,
+    this.reconnectError,
+  });
+
+  final StreamController<WearableDescriptor> _discoveryController =
+      StreamController.broadcast();
+  final WearableSession? session;
+  final Object? connectError;
+  final Object? reconnectError;
+  int discoverCalls = 0;
+  int stopDiscoveryCalls = 0;
+  int connectCalls = 0;
+  int reconnectCalls = 0;
+  int disposeCalls = 0;
+  WearableDescriptor? connectedDescriptor;
+  String? reconnectedStableId;
+
+  void emitDiscovery(WearableDescriptor descriptor) {
+    _discoveryController.add(descriptor);
+  }
+
+  @override
+  Future<void> requestPermissions() async {}
+
+  @override
+  Stream<WearableDescriptor> discover() {
+    discoverCalls++;
+    return _discoveryController.stream;
+  }
+
+  @override
+  Future<void> stopDiscovery() async {
+    stopDiscoveryCalls++;
+  }
+
+  @override
+  Future<WearableSession> connect(WearableDescriptor descriptor) async {
+    connectCalls++;
+    connectedDescriptor = descriptor;
+    if (connectError != null) throw connectError!;
+    return session!;
+  }
+
+  @override
+  Future<WearableSession> reconnect(String stableId) async {
+    reconnectCalls++;
+    reconnectedStableId = stableId;
+    if (reconnectError != null) throw reconnectError!;
+    return session!;
+  }
+
+  @override
+  Future<void> dispose() async {
+    disposeCalls++;
+    await _discoveryController.close();
+  }
+}
+
 class _FakeWearableSession implements WearableSession {
   _FakeWearableSession(this.updates);
 
@@ -303,6 +500,8 @@ class _FakeWearableSession implements WearableSession {
   int startCaptureCalls = 0;
   int stopCaptureCalls = 0;
   int cancelCaptureCalls = 0;
+  int setupCalls = 0;
+  final List<WearableSetupMode> setupModes = [];
 
   void emitConnection(WearableConnectionStatus status) {
     _connectionController.add(status);
@@ -336,6 +535,8 @@ class _FakeWearableSession implements WearableSession {
   Stream<WearableSetupUpdate> setup({
     WearableSetupMode mode = WearableSetupMode.provision,
   }) async* {
+    setupCalls++;
+    setupModes.add(mode);
     for (final update in updates) {
       await Future<void>.delayed(Duration.zero);
       yield update;
