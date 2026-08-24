@@ -85,4 +85,28 @@ void main() {
 
     await controller.dispose();
   });
+
+  test('records bounded simulator history and latest setup state', () async {
+    final controller = HaloSimulatorController();
+    final setup = WearableSetupUpdate(
+      stage: WearableSetupStage.installingApplication,
+      progress: 0.5,
+    );
+
+    controller.recordSetupUpdate(setup);
+    for (var index = 0;
+        index < HaloSimulatorController.maxEventHistoryLength + 5;
+        index++) {
+      controller.recordHoldRequest();
+    }
+
+    expect(controller.latestSetupUpdate, setup);
+    expect(
+      controller.eventHistory,
+      hasLength(HaloSimulatorController.maxEventHistoryLength),
+    );
+    expect(controller.eventHistory.last, contains('display hold'));
+
+    await controller.dispose();
+  });
 }

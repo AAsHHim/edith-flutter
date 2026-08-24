@@ -27,9 +27,11 @@ class SimulatedWearableGateway implements WearableGateway {
     this.discoveryDelay = const Duration(milliseconds: 50),
     this.connectionDelay = const Duration(milliseconds: 25),
     this.setupDelay = const Duration(milliseconds: 10),
-  }) : controller = controller ?? HaloSimulatorController();
+  })  : _ownsController = controller == null,
+        controller = controller ?? HaloSimulatorController();
 
   final HaloSimulatorController controller;
+  final bool _ownsController;
   final Duration discoveryDelay;
   final Duration connectionDelay;
   final Duration setupDelay;
@@ -126,7 +128,7 @@ class SimulatedWearableGateway implements WearableGateway {
     await _session?.dispose();
     _session = null;
     _disposed = true;
-    await controller.dispose();
+    if (_ownsController) await controller.dispose();
   }
 
   void _ensureActive() {

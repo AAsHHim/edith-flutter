@@ -34,34 +34,39 @@ class SimulatedWearableSession implements WearableSession {
     WearableSetupMode mode = WearableSetupMode.provision,
   }) async* {
     _ensureActive();
-    yield WearableSetupUpdate(
+    yield _recordSetupUpdate(WearableSetupUpdate(
       stage: WearableSetupStage.checkingDevice,
       progress: 0,
-    );
+    ));
     await Future<void>.delayed(setupDelay);
-    yield WearableSetupUpdate(
+    yield _recordSetupUpdate(WearableSetupUpdate(
       stage: WearableSetupStage.checkingDevice,
       progress: 0.5,
-    );
+    ));
     await Future<void>.delayed(setupDelay);
 
     if (mode == WearableSetupMode.provision) {
-      yield WearableSetupUpdate(
+      yield _recordSetupUpdate(WearableSetupUpdate(
         stage: WearableSetupStage.installingApplication,
         progress: 0,
-      );
+      ));
       await Future<void>.delayed(setupDelay);
-      yield WearableSetupUpdate(
+      yield _recordSetupUpdate(WearableSetupUpdate(
         stage: WearableSetupStage.installingApplication,
         progress: 1,
-      );
+      ));
       await Future<void>.delayed(setupDelay);
     }
 
-    yield WearableSetupUpdate(
+    yield _recordSetupUpdate(WearableSetupUpdate(
       stage: WearableSetupStage.ready,
       progress: 1,
-    );
+    ));
+  }
+
+  WearableSetupUpdate _recordSetupUpdate(WearableSetupUpdate update) {
+    _controller.recordSetupUpdate(update);
+    return update;
   }
 
   @override

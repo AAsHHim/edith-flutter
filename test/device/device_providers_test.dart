@@ -26,10 +26,31 @@ void main() {
       ],
     );
 
+    final controller = container.read(haloSimulatorControllerProvider);
     final gateway = container.read(wearableGatewayProvider);
 
     expect(gateway, isA<SimulatedWearableGateway>());
+    expect((gateway as SimulatedWearableGateway).controller, same(controller));
     await gateway.dispose();
+    container.dispose();
+  });
+
+  test('hardware mode does not expose simulator controller state', () {
+    final container = ProviderContainer(
+      overrides: [
+        deviceModeProvider.overrideWithValue(DeviceMode.hardware),
+      ],
+    );
+
+    expect(
+      () => container.read(haloSimulatorControllerProvider),
+      throwsA(isA<StateError>()),
+    );
+    expect(
+      container.read(wearableGatewayProvider),
+      isA<BrilliantWearableGateway>(),
+    );
+    container.dispose();
   });
 
   test('default composition remains hardware', () {

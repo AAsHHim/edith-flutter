@@ -26,6 +26,8 @@ void main() {
       ),
       isTrue,
     );
+    expect(controller.latestSetupUpdate?.stage, WearableSetupStage.ready);
+    expect(controller.eventHistory, contains('setup: ready 100%'));
 
     await controller.dispose();
   });
