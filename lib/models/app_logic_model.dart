@@ -382,6 +382,7 @@ class AppLogicModel extends ChangeNotifier {
           scriptProgress = (update.progress ?? 0) * 100;
         } else if (update.isReady) {
           _setPairedDevice(_wearableSession!.descriptor.stableId);
+          triggerEvent(Event.done);
         }
         break;
       case State.updateFirmware:
@@ -529,6 +530,7 @@ class AppLogicModel extends ChangeNotifier {
           break;
 
         case State.uploadMainLua:
+          state.changeOn(Event.done, State.connected);
           state.changeOn(Event.error, State.disconnected);
           break;
 

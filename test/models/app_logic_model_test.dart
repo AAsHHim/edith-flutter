@@ -300,6 +300,7 @@ void main() {
 
     model.triggerEvent(Event.init);
     await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 800));
 
     final preferences = await SharedPreferences.getInstance();
     expect(preferences.getString('PairedDevice'), 'hardware-frame-id');
@@ -402,12 +403,15 @@ void main() {
 
     model.triggerEvent(Event.init);
     await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 800));
 
     final preferences = await SharedPreferences.getInstance();
-    expect(model.state.current, State.uploadMainLua);
+    expect(model.state.current, State.connected);
     expect(model.scriptProgress, 100);
     expect(preferences.getString('PairedDevice'), 'frame-test');
     expect(preferences.getString('SimulatedPairedDevice'), isNull);
+
+    model.dispose();
   });
 
   testWidgets(
@@ -528,7 +532,7 @@ void main() {
     model.dispose();
   });
 
-  testWidgets('simulator gateway runs discovery, connect, and setup workflow',
+  testWidgets('simulator setup ready completes the connection workflow',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'PairedDevice': 'hardware-frame-id',
@@ -552,9 +556,10 @@ void main() {
 
     model.triggerEvent(Event.buttonPressed);
     await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 800));
 
     final preferences = await SharedPreferences.getInstance();
-    expect(model.state.current, State.uploadMainLua);
+    expect(model.state.current, State.connected);
     expect(
       preferences.getString('SimulatedPairedDevice'),
       'edith-halo-simulator',
