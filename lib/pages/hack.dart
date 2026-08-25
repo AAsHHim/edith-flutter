@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:noa/style.dart';
-import 'package:noa/device/device_mode.dart';
 import 'package:noa/device/device_providers.dart';
 import 'package:noa/pages/halo_simulator.dart';
 import 'package:noa/util/app_log.dart';
@@ -76,28 +75,31 @@ class HackPage extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (ref.watch(deviceModeProvider) == DeviceMode.simulator)
+            if (ref.watch(simulatorUiEnabledProvider))
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
-                child: OutlinedButton.icon(
-                  key: const Key('halo-simulator-entry'),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) => const HaloSimulatorPage(),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    key: const Key('halo-simulator-entry'),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => const HaloSimulatorPage(),
+                        ),
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: EdithColors.primaryAccent,
+                      side: const BorderSide(
+                        color: EdithColors.primaryAccent,
                       ),
-                    );
-                  },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: EdithColors.primaryAccent,
-                    side: const BorderSide(
-                      color: EdithColors.primaryAccent,
+                      minimumSize: const Size.fromHeight(48),
                     ),
-                    minimumSize: const Size(double.infinity, 48),
+                    icon: const Icon(Icons.view_in_ar),
+                    label: const Text('HALO SIMULATOR'),
                   ),
-                  icon: const Icon(Icons.view_in_ar),
-                  label: const Text('HALO SIMULATOR'),
                 ),
               ),
             const Padding(

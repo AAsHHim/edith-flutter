@@ -44,3 +44,7 @@ final wearableGatewayProvider = Provider<WearableGateway>((ref) {
       return gateway;
   }
 });
+
+final simulatorUiEnabledProvider = Provider<bool>(
+  (ref) => ref.watch(deviceModeProvider) == DeviceMode.simulator,
+);

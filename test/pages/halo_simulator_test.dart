@@ -12,6 +12,10 @@ import 'package:noa/pages/halo_simulator.dart';
 
 void main() {
   testWidgets('simulator entry appears only in simulator mode', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final controller = HaloSimulatorController();
     addTearDown(controller.dispose);
 
@@ -25,6 +29,10 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const Key('halo-simulator-entry')), findsOneWidget);
+    expect(
+      find.byKey(const Key('halo-simulator-entry')).hitTestable(),
+      findsOneWidget,
+    );
     expect(find.text('HALO SIMULATOR'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('halo-simulator-entry')));

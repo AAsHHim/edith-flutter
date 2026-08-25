@@ -31,6 +31,7 @@ void main() {
 
     expect(gateway, isA<SimulatedWearableGateway>());
     expect((gateway as SimulatedWearableGateway).controller, same(controller));
+    expect(container.read(simulatorUiEnabledProvider), isTrue);
     await gateway.dispose();
     container.dispose();
   });
@@ -50,6 +51,7 @@ void main() {
       container.read(wearableGatewayProvider),
       isA<BrilliantWearableGateway>(),
     );
+    expect(container.read(simulatorUiEnabledProvider), isFalse);
     container.dispose();
   });
 

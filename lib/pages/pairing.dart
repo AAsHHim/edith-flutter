@@ -5,17 +5,42 @@ import 'package:noa/pages/noa.dart';
 import 'package:noa/style.dart';
 import 'package:noa/util/switch_page.dart';
 
-class PairingPage extends ConsumerWidget {
+class PairingPage extends ConsumerStatefulWidget {
   const PairingPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PairingPage> createState() => _PairingPageState();
+}
+
+class _PairingPageState extends ConsumerState<PairingPage> {
+  bool _finishingPairing = false;
+
+  void _finishPairing() {
+    if (_finishingPairing) return;
+    _finishingPairing = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (ref.watch(app.model).state.current == app.State.connected ||
-          ref.watch(app.model).state.current == app.State.disconnected) {
-        switchPage(context, const NoaPage());
-      }
+      if (mounted) switchPage(context, const NoaPage());
     });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentState = ref.watch(
+      app.model.select((model) => model.state.current as app.State),
+    );
+    ref.listen(
+      app.model.select((model) => model.state.current as app.State),
+      (_, nextState) {
+        if (nextState == app.State.connected ||
+            nextState == app.State.disconnected) {
+          _finishPairing();
+        }
+      },
+    );
+    if (currentState == app.State.connected ||
+        currentState == app.State.disconnected) {
+      _finishPairing();
+    }
 
     String pairingBoxText = "";
     String pairingBoxButtonText = "";
@@ -25,7 +50,7 @@ class PairingPage extends ConsumerWidget {
     int scriptProgress = ref.watch(app.model).scriptProgress.toInt();
     String deviceName = ref.watch(app.model).deviceName;
 
-    switch (ref.watch(app.model).state.current) {
+    switch (currentState) {
       case app.State.scanning:
         pairingBoxText = "Bring your device close";
         pairingBoxButtonText = "Searching";
@@ -76,6 +101,8 @@ class PairingPage extends ConsumerWidget {
         pairingBoxButtonText = "Try again";
         pairingBoxImage = Image.asset('assets/images/repair.gif');
         pairingBoxButtonEnabled = true;
+        break;
+      default:
         break;
     }
 
